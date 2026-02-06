@@ -1,0 +1,727 @@
+---
+title: Troubleshooting
+description: Guia de resolução de problemas — erros comuns e como corrigi-los
+---
+
+# Troubleshooting
+
+Este guia ajuda a diagnosticar e resolver problemas comuns no sistema de automação de boletos.
+
+## Checklist de pré-voo
+
+Antes de executar o sistema, verifique:
+
+- [ ] **Pasta BoletosEntrada/** contém boletos PDF para processar
+- [ ] **Pasta Notas/** contém XMLs das notas fiscais correspondentes
+- [ ] **Microsoft Outlook** está instalado e configurado
+- [ ] **Conta cobranca@jotajota.net.br** está configurada no Outlook
+- [ ] **Arquivo de assinatura** existe (`assinatura.jpg` ou caminho configurado)
+- [ ] **Pastas operacionais** existem (BoletosRenomeados, BoletosEnviados, Auditoria, Erros)
+- [ ] **Dependências Python** estão instaladas (`pip install -r requirements.txt`)
+- [ ] **MODO_PREVIEW** está configurado corretamente no `config.py`
+
+<Tip>
+Execute o sistema em **MODO_PREVIEW = True** primeiro para revisar os emails antes de enviar automaticamente.
+</Tip>
+
+## Erros na renomeação
+
+### Erros de extração de dados
+
+<Accordion title="Nome do arquivo deve conter numero da nota (minimo 6 digitos)">
+**Sintoma:**
+```
+[X] ERRO: Nome do arquivo deve conter numero da nota (minimo 6 digitos). Encontrado: X digitos
+```
+
+**Causa:**
+O nome do arquivo PDF do boleto não contém um número de nota fiscal válido (6 dígitos).
+
+**Solução:**
+1. Verifique se o boleto foi baixado corretamente do portal da FIDC
+2. Renomeie manualmente o arquivo para incluir o número da nota (ex: `310227.pdf`)
+3. Ou use o formato completo: `NOME - NF 310227 - DATA - VALOR.pdf`
+</Accordion>
+
+<Accordion title="Numero da nota nao encontrado">
+**Sintoma:**
+```
+[ERRO] Numero da nota nao encontrado!
+```
+
+**Causa:**
+O sistema não conseguiu extrair o número da nota nem do boleto PDF nem do XML.
+
+**Solução:**
+1. Verifique se o campo "Número do Documento" está presente no boleto
+2. Confirme que o XML da nota fiscal existe na pasta `Notas/`
+3. Verifique se o CNPJ do boleto corresponde ao CNPJ do XML
+4. Como último recurso, renomeie o arquivo manualmente com o número da nota
+</Accordion>
+
+<Accordion title="CNPJ nao encontrado no PDF">
+**Sintoma:**
+```
+[AVISO] CNPJ nao encontrado no PDF
+```
+
+**Causa:**
+O sistema não conseguiu extrair o CNPJ do pagador do boleto PDF. Isso pode acontecer se:
+- O layout do boleto é diferente dos 4 FIDCs conhecidos
+- O PDF está corrompido ou com OCR ruim
+- O campo "Pagador" não está no formato esperado
+
+**Solução:**
+1. Abra o PDF manualmente e verifique se o CNPJ está visível
+2. Se o CNPJ estiver presente mas não foi extraído, reporte o layout do boleto para ajuste no código
+3. O sistema continuará processando, mas a validação de CNPJ será pulada
+</Accordion>
+
+<Accordion title="Data de vencimento nao encontrada">
+**Sintoma:**
+```
+[AVISO] Data de vencimento nao encontrada, usando 'A definir'
+```
+
+**Causa:**
+O sistema não conseguiu extrair a data de vencimento do boleto PDF.
+
+**Solução:**
+1. Verifique se o campo "Vencimento" está presente no boleto
+2. O sistema usará "A definir" como placeholder
+3. Corrija manualmente o nome do arquivo após renomeação se necessário
+</Accordion>
+
+<Accordion title="Valor nao encontrado (SEM_VALOR)">
+**Sintoma:**
+```
+Valor: SEM_VALOR
+```
+
+**Causa:**
+O sistema não conseguiu extrair o valor do boleto PDF.
+
+**Solução:**
+1. Verifique se o campo "(=) Valor Documento" está presente no boleto
+2. Confirme que o valor está no formato brasileiro (ex: 1.234,56)
+3. Se o XML da nota fiscal estiver disponível, o sistema usará o valor do XML
+4. Como último recurso, edite o nome do arquivo após renomeação
+</Accordion>
+
+<Accordion title="Pagador nao encontrado (SEM_PAGADOR)">
+**Sintoma:**
+```
+Pagador: SEM_PAGADOR
+```
+
+**Causa:**
+O sistema não conseguiu extrair o nome do pagador do boleto PDF.
+
+**Solução:**
+1. Verifique se o campo "Pagador" ou "Sacado" está presente no boleto
+2. Se o XML da nota fiscal estiver disponível, o sistema usará o nome do XML
+3. Como último recurso, edite o nome do arquivo após renomeação
+</Accordion>
+
+### Erros de matching com XML
+
+<Accordion title="XML nao encontrado para nota XXXXXX">
+**Sintoma:**
+```
+[AVISO] Número do documento XXXXXX não encontrado nos XMLs!
+```
+
+**Causa:**
+O número da nota extraído do boleto não corresponde a nenhum XML na pasta `Notas/`.
+
+**Solução:**
+1. Verifique se o XML da nota fiscal existe na pasta `Notas/`
+2. Confirme que o nome do XML contém o número da nota (ex: `3-0310227.xml` ou `310227.xml`)
+3. Verifique se o XML não está corrompido (abra no navegador para validar)
+4. Se o XML não existir, solicite ao ERP (Viasoft) ou à equipe fiscal
+</Accordion>
+
+<Accordion title="DIVERGENCIA DETECTADA - Numero do Documento vs Matching">
+**Sintoma:**
+```
+[ALERTA] DIVERGENCIA DETECTADA!
+[ALERTA]    Numero do Documento: 310227
+[ALERTA]    Matching via XML: 310228
+```
+
+**Causa:**
+O número extraído do campo "Número do Documento" do boleto é diferente do número encontrado via matching de CNPJ/valor.
+
+**Solução:**
+1. O sistema **sempre prioriza o Número do Documento** (mais confiável)
+2. Verifique manualmente qual número está correto
+3. Se o matching estiver errado, pode indicar:
+   - Boleto de parcela diferente da esperada
+   - CNPJ ou valor divergente entre boleto e XML
+4. Revise os dados no ERP (Viasoft) se necessário
+</Accordion>
+
+<Accordion title="Detectado juros/multa no boleto">
+**Sintoma:**
+```
+[ALERTA] Detectado juros/multa de R$ 50,00 no boleto!
+[INFO] Valor NF: R$ 1.000,00 | Valor Boleto: R$ 1.050,00
+```
+
+**Causa:**
+O valor do boleto é maior que o valor da nota fiscal, indicando juros ou multa por atraso.
+
+**Solução:**
+1. **Isso é esperado** para boletos vencidos
+2. O sistema **sempre usa o valor original da NF** (sem juros) no nome do arquivo
+3. O cliente pagará o valor do boleto (com juros), mas o registro usa o valor da NF
+4. Nenhuma ação necessária - apenas informativo
+</Accordion>
+
+## Erros na validação (5 camadas)
+
+### Camada 1: XML
+
+<Accordion title="XML nao encontrado ou invalido para nota XXXXXX">
+**Sintoma:**
+```
+[X] FALHA: XML nao encontrado ou invalido para nota XXXXXX
+```
+
+**Causa:**
+O XML da nota fiscal não existe ou está corrompido.
+
+**Solução:**
+1. Verifique se o arquivo XML existe na pasta `Notas/`
+2. Abra o XML no navegador ou editor de texto para validar estrutura
+3. Se corrompido, solicite novo XML ao ERP (Viasoft)
+4. Confirme que o número da nota no XML corresponde ao esperado
+</Accordion>
+
+### Camada 2: CNPJ
+
+<Accordion title="CNPJ divergente! Boleto vs XML">
+**Sintoma:**
+```
+[X] FALHA: CNPJ divergente! Boleto: 12345678000190, XML: 98765432000110
+```
+
+**Causa:**
+O CNPJ extraído do boleto é diferente do CNPJ no XML da nota fiscal.
+
+**Solução:**
+1. **BLOQUEIO CRÍTICO** - Email não será enviado por segurança
+2. Verifique manualmente qual CNPJ está correto:
+   - Abra o boleto PDF e localize o campo "Pagador"
+   - Abra o XML e verifique o campo `<dest><CNPJ>`
+3. Possíveis causas:
+   - Boleto foi gerado para cliente errado
+   - XML é de nota fiscal diferente
+   - Erro de extração de CNPJ do PDF (layout desconhecido)
+4. **Ação:** Corrija o erro na origem (FIDC ou ERP) antes de reprocessar
+</Accordion>
+
+<Accordion title="CNPJ nao disponivel para validacao">
+**Sintoma:**
+```
+[AVISO] CNPJ nao disponivel para validacao (boleto: N/A, XML: N/A)
+```
+
+**Causa:**
+O sistema não conseguiu extrair o CNPJ nem do boleto nem do XML.
+
+**Solução:**
+1. **Validação pulada** - Sistema continua com outras camadas
+2. Verifique se o CNPJ está presente no boleto PDF
+3. Verifique se o XML contém o campo `<dest><CNPJ>`
+4. Se ambos estiverem ausentes, o risco de erro aumenta - revise manualmente
+</Accordion>
+
+### Camada 3: Nome
+
+<Accordion title="Similaridade baixa entre boleto e XML">
+**Sintoma:**
+```
+[AVISO] Similaridade baixa: 65%
+        Boleto: EMPRESA ABC COMERCIO LTDA
+        XML:    EMPRESA ABC LTDA ME
+```
+
+**Causa:**
+O nome do pagador no boleto é diferente do nome no XML (similaridade < 85%).
+
+**Solução:**
+1. **Sistema aceita mesmo assim** - Não bloqueia envio
+2. Verifique manualmente se são a mesma empresa:
+   - Razão social pode ter mudado (ex: ME → EPP)
+   - Nome fantasia vs razão social
+   - Abreviações diferentes
+3. Se forem empresas diferentes, **PARE** e investigue antes de enviar
+</Accordion>
+
+### Camada 4: Valor
+
+<Accordion title="Valor divergente! Boleto vs XML">
+**Sintoma:**
+```
+[X] FALHA: Valor divergente! Boleto: 1.234,56, XML: 1.234,50, Diff: R$ 0,06
+```
+
+**Causa:**
+O valor do boleto é diferente do valor do XML, e a diferença excede a tolerância (0 centavos).
+
+**Solução:**
+1. **BLOQUEIO CRÍTICO** - Email não será enviado
+2. Verifique qual valor está correto:
+   - Abra o boleto PDF e localize "(=) Valor Documento"
+   - Abra o XML e verifique `<total><vNF>` ou `<dup><vDup>`
+3. Possíveis causas:
+   - Boleto de parcela diferente (verificar vencimento)
+   - Erro de OCR na extração do valor do PDF
+   - Juros/multa incluídos no boleto (mas não no XML)
+   - XML de nota fiscal diferente
+4. **Ação:** Corrija na origem ou ajuste a tolerância em `config.py` (não recomendado)
+</Accordion>
+
+<Accordion title="Valor nao disponivel para validacao">
+**Sintoma:**
+```
+[AVISO] Valor nao disponivel para validacao
+```
+
+**Causa:**
+O sistema não conseguiu extrair o valor nem do boleto nem do XML.
+
+**Solução:**
+1. **Validação pulada** - Sistema continua com outras camadas
+2. Verifique se o valor está presente no boleto PDF
+3. Verifique se o XML contém o campo `<total><vNF>`
+4. **Alto risco de erro** - Revise manualmente antes de enviar
+</Accordion>
+
+### Camada 5: Email
+
+<Accordion title="Nenhum email valido encontrado no XML">
+**Sintoma:**
+```
+[X] FALHA: Nenhum email valido encontrado no XML
+```
+
+**Causa:**
+O XML da nota fiscal não contém emails válidos do cliente, ou os emails estão truncados/inválidos.
+
+**Solução:**
+1. **BLOQUEIO CRÍTICO** - Email não pode ser enviado sem destinatário
+2. Abra o XML e verifique o campo `<dest><email>`
+3. Possíveis problemas:
+   - Email truncado (ex: `compras@empresa.` sem domínio completo)
+   - Email inválido (formato incorreto)
+   - Campo `<email>` vazio ou ausente
+4. **Ação:** Atualize o cadastro do cliente no ERP (Viasoft) com emails válidos
+5. Solicite novo XML após atualização
+</Accordion>
+
+<Accordion title="Emails invalidos filtrados">
+**Sintoma:**
+```
+[AVISO] 2 email(s) invalido(s) filtrado(s):
+     - teste@gmail. (incompleto/invalido)
+     - contato@ (incompleto/invalido)
+```
+
+**Causa:**
+O XML contém emails, mas alguns estão incompletos ou em formato inválido.
+
+**Solução:**
+1. **Sistema filtra automaticamente** emails inválidos
+2. Se restarem emails válidos, o envio continua normalmente
+3. Se **nenhum** email válido restar, o boleto será rejeitado
+4. **Ação preventiva:** Atualize cadastro no ERP para evitar problemas futuros
+</Accordion>
+
+## Erros no envio
+
+<Accordion title="Conta cobranca@jotajota.net.br nao encontrada">
+**Sintoma:**
+```
+[ERRO] ERRO: Conta cobranca@jotajota.net.br não encontrada — envio abortado.
+```
+
+**Causa:**
+O Microsoft Outlook não tem a conta `cobranca@jotajota.net.br` configurada.
+
+**Solução:**
+1. Abra o Microsoft Outlook
+2. Vá em **Arquivo → Configurações de Conta → Gerenciar Perfis**
+3. Adicione a conta `cobranca@jotajota.net.br`
+4. Reinicie o Outlook e teste novamente
+5. **Crítico:** Todos os emails devem ser enviados desta conta específica
+</Accordion>
+
+<Accordion title="Arquivo nao encontrado (anexo)">
+**Sintoma:**
+```
+[ERRO] Arquivo não encontrado: C:\...\boleto.pdf
+```
+
+**Causa:**
+O sistema tentou anexar um arquivo que não existe mais.
+
+**Solução:**
+1. Verifique se o arquivo foi movido ou deletado durante o processamento
+2. Confirme que as pastas operacionais estão acessíveis
+3. Se em rede, verifique conectividade com o servidor
+4. Reprocesse o boleto após garantir que o arquivo existe
+</Accordion>
+
+<Accordion title="Falha ao anexar arquivo">
+**Sintoma:**
+```
+[ERRO] Falha ao anexar boleto.pdf: [Erro específico]
+```
+
+**Causa:**
+O Outlook não conseguiu anexar o arquivo ao email.
+
+**Solução:**
+1. Verifique se o arquivo não está aberto em outro programa
+2. Confirme que o arquivo não está corrompido (tente abrir manualmente)
+3. Verifique permissões de leitura do arquivo
+4. Se o arquivo for muito grande (>25MB), pode exceder limite do Outlook
+</Accordion>
+
+<Accordion title="MODO_PREVIEW impedindo envio automatico">
+**Sintoma:**
+O sistema abre emails no Outlook mas não envia automaticamente.
+
+**Causa:**
+A flag `MODO_PREVIEW = True` está ativada no `config.py`.
+
+**Solução:**
+1. **Isso é intencional** - MODO_PREVIEW serve para revisar emails antes de enviar
+2. Revise cada email aberto no Outlook
+3. Clique em "Enviar" manualmente após revisar
+4. Para envio automático:
+   - Edite `config.py`
+   - Mude `MODO_PREVIEW = False`
+   - **ATENÇÃO:** Só faça isso após validação completa com a equipe!
+</Accordion>
+
+<Accordion title="Timeout ao criar email no Outlook">
+**Sintoma:**
+Sistema trava ou demora muito ao criar emails.
+
+**Causa:**
+O Outlook está lento ou sobrecarregado.
+
+**Solução:**
+1. Feche outros programas para liberar memória
+2. Reinicie o Outlook
+3. Verifique se há muitos emails não lidos ou pastas grandes
+4. Compacte a caixa de entrada do Outlook (Arquivo → Ferramentas → Limpar Caixa de Correio)
+</Accordion>
+
+## Erros operacionais
+
+<Accordion title="Boletos duplicados na pasta de entrada">
+**Sintoma:**
+Mesmo boleto aparece múltiplas vezes para processar.
+
+**Causa:**
+Arquivos duplicados foram colocados na pasta `BoletosEntrada/`.
+
+**Solução:**
+1. **Antes de processar:** Verifique se há duplicatas na pasta
+2. Use o comando (Windows): `dir /b BoletosEntrada | sort | uniq -d`
+3. Delete manualmente os arquivos duplicados
+4. O sistema não detecta duplicatas automaticamente - responsabilidade do operador
+</Accordion>
+
+<Accordion title="Cliente nao recebeu o boleto">
+**Sintoma:**
+Cliente liga dizendo que não recebeu o boleto por email.
+
+**Causa:**
+Várias possibilidades: email errado, spam, filtro corporativo, etc.
+
+**Solução:**
+1. **Consulte o relatório de auditoria:**
+   - Abra `Auditoria/auditoria_aprovados_YYYYMMDD_HHMMSS.txt`
+   - Busque pelo nome do cliente ou número da nota
+   - Verifique os emails de destino registrados
+2. **Confirme o envio:**
+   - Verifique se o status é "✓ ENVIADO COM SUCESSO"
+   - Confirme os emails destinatários
+3. **Possíveis problemas:**
+   - Email caiu na caixa de spam do cliente
+   - Email está incorreto no cadastro (Viasoft)
+   - Filtro corporativo bloqueou o email
+4. **Ação imediata:**
+   - Acesse `BoletosEnviados/` e localize o boleto
+   - Reenvie manualmente via Outlook para o email correto
+   - Atualize cadastro no Viasoft se necessário
+</Accordion>
+
+<Accordion title="Arquivos residuais em BoletosRenomeados">
+**Sintoma:**
+Boletos antigos acumulados na pasta `BoletosRenomeados/`.
+
+**Causa:**
+Boletos foram renomeados mas não foram processados (enviados ou rejeitados).
+
+**Solução:**
+1. **Identifique a causa:**
+   - Boletos rejeitados na validação? → Verifique `Erros/erros_*.txt`
+   - Sistema foi interrompido antes do envio?
+   - MODO_PREVIEW ativo e operador esqueceu de enviar?
+2. **Ação:**
+   - Se rejeitados: Corrija os erros e mova de volta para `BoletosEntrada/`
+   - Se pendentes de envio: Execute o sistema novamente
+   - Se já enviados: Mova manualmente para `BoletosEnviados/`
+3. **Prevenção:**
+   - Sempre verifique os relatórios de auditoria após execução
+   - Em MODO_PREVIEW, envie todos os emails antes de fechar o Outlook
+</Accordion>
+
+<Accordion title="Sistema lento ao processar muitos boletos">
+**Sintoma:**
+Processamento demora muito tempo (>5s por boleto).
+
+**Causa:**
+Extração de PDF, validação de XMLs e criação de emails são operações pesadas.
+
+**Solução:**
+1. **Otimizações:**
+   - Processe em lotes menores (ex: 20 boletos por vez)
+   - Feche programas desnecessários
+   - Use SSD ao invés de HD (se possível)
+2. **Desabilite IA** (se estiver ativa):
+   - Edite `config.py`
+   - Mude `USAR_IA = False`
+   - Regex é mais rápido que IA
+3. **Verifique XMLs:**
+   - XMLs muito grandes (>1MB) podem atrasar
+   - Considere limpar XMLs antigos da pasta `Notas/`
+</Accordion>
+
+## Como ler os logs de auditoria
+
+O sistema gera 3 tipos de relatórios:
+
+### 1. Relatório de Aprovados (Auditoria/)
+
+**Localização:** `Auditoria/auditoria_aprovados_YYYYMMDD_HHMMSS.txt`
+
+**Conteúdo:** Apenas boletos enviados com sucesso.
+
+**Formato:**
+```
+[001/010] AREAIS DO LESTE SPE LTDA - NF 310227 - 13-01 - R$ 2.833,34.pdf
+  Timestamp: 30/10/2025 17:12:29
+  Status: ✓ ENVIADO COM SUCESSO
+
+  Validacoes Aprovadas:
+    ✓ CAMADA 1 - XML: XML encontrado (310227)
+    ✓ CAMADA 2 - CNPJ: Match perfeito: 54737141000110
+    ✓ CAMADA 3 - Nome: Similaridade 100%
+    ✓ CAMADA 4 - Valor: Diferenca R$ 0,00
+    ✓ CAMADA 5 - Email: 2 email(s) valido(s)
+
+  Dados do XML:
+    - numero_nota: 310227
+    - nome: AREAIS DO LESTE SPE LTDA
+    - cnpj: 54737141000110
+    - valor_total: 2833.34
+    - emails: ['compras@dacampos.com.br', 'financeiro@dacampos.com.br']
+
+  Email Enviado:
+    Para: compras@dacampos.com.br; financeiro@dacampos.com.br
+    CC: adm@jotajota.net.br
+    Anexos: 2
+```
+
+**Campos importantes:**
+- **Timestamp:** Data/hora exata do envio
+- **Validacoes Aprovadas:** Todas as 5 camadas que passaram
+- **Dados do XML:** Informações extraídas da nota fiscal
+- **Email Enviado:** Destinatários e anexos
+
+### 2. Relatório de Rejeitados (Erros/)
+
+**Localização:** `Erros/erros_YYYYMMDD_HHMMSS.txt`
+
+**Conteúdo:** Apenas boletos que falharam na validação.
+
+**Formato:**
+```
+[001/003] CLIENTE XYZ LTDA - NF 310228 - 02-10 - R$ 1.445,54.pdf
+  Timestamp: 30/10/2025 17:12:35
+  Status: ✗ REJEITADO
+  Motivo: CNPJ divergente! Boleto: 12345678000190, XML: 98765432000110
+
+  Validacoes:
+    ✓ CAMADA 1 - XML: XML encontrado (310228)
+    ✗ CAMADA 2 - CNPJ: CNPJ divergente! Boleto: 12345678000190, XML: 98765432000110
+
+  Dados do Boleto:
+    - cnpj: 12345678000190
+    - numero_nota: 310228
+    - fidc: NOVAX
+    - data_vencimento: 02/10/2026
+```
+
+**Campos importantes:**
+- **Motivo:** Razão específica da rejeição
+- **Validacoes:** Quais camadas passaram (✓) e qual falhou (✗)
+- **Dados do Boleto:** Informações extraídas do PDF
+
+<Warning>
+Boletos rejeitados **NÃO são enviados**. Corrija o erro e reprocesse.
+</Warning>
+
+### 3. Relatório JSON (Auditoria/)
+
+**Localização:** `Auditoria/auditoria_YYYYMMDD_HHMMSS.json`
+
+**Conteúdo:** Dados estruturados completos (para integração ou análise).
+
+**Estrutura:**
+```json
+{
+  "execucao_id": "20251030_171229",
+  "timestamp_inicio": "2025-10-30T17:12:29",
+  "timestamp_fim": "2025-10-30T17:15:42",
+  "duracao_segundos": 193.5,
+  "modo": "preview",
+  "versao": "6.0.0 (XML-Based)",
+  "resumo": {
+    "total_boletos": 10,
+    "aprovados": 7,
+    "rejeitados": 3,
+    "emails_enviados": 7,
+    "taxa_sucesso": 0.7
+  },
+  "boletos": [
+    {
+      "arquivo": "AREAIS DO LESTE SPE LTDA - NF 310227 - 13-01 - R$ 2.833,34.pdf",
+      "status": "aprovado",
+      "validacoes": {
+        "xml_encontrado": true,
+        "cnpj_match": true,
+        "nome_match": true,
+        "valor_match": true,
+        "email_valido": true
+      },
+      "email_destinatarios": ["compras@dacampos.com.br"],
+      "email_cc": ["adm@jotajota.net.br"]
+    }
+  ]
+}
+```
+
+**Uso:**
+- Análise de métricas (taxa de sucesso, tempo médio)
+- Integração com outros sistemas
+- Auditoria automatizada
+- Geração de dashboards
+
+<Tip>
+Use ferramentas como `jq` (Linux) ou JSON Viewer (Windows) para analisar o JSON de forma mais legível.
+</Tip>
+
+### 4. Log de Erros Críticos (Auditoria/)
+
+**Localização:** `Auditoria/erros_criticos_YYYYMMDD.log`
+
+**Conteúdo:** Apenas erros críticos do dia (acumulativo).
+
+**Formato:**
+```
+================================================================================
+Execucao: 20251030_171229
+Timestamp: 30/10/2025 17:12:29
+================================================================================
+
+[17:12:35] CNPJ divergente entre boleto e XML [CLIENTE XYZ LTDA - NF 310228.pdf]
+[17:13:10] Nenhum email valido encontrado no XML [EMPRESA ABC - NF 310229.pdf]
+[17:14:22] Bloqueado: cliente@exemplo.com - EMPRESA DEF - Erro crítico na validação de notas
+```
+
+**Uso:**
+- Troubleshooting rápido
+- Identificar problemas recorrentes
+- Alertas para equipe de suporte
+
+<Note>
+Este log **acumula erros do dia inteiro** (append mode). Útil para identificar padrões de erro.
+</Note>
+
+## Dicas de troubleshooting
+
+### Estratégia de diagnóstico
+
+1. **Identifique o tipo de erro:**
+   - Renomeação? → Verifique `RenomeaçãoBoletos.py` logs no console
+   - Validação? → Consulte `Erros/erros_*.txt`
+   - Envio? → Verifique Outlook e `Auditoria/erros_criticos_*.log`
+
+2. **Consulte os relatórios na ordem:**
+   - Primeiro: `erros_criticos_*.log` (erros graves)
+   - Segundo: `erros_*.txt` (boletos rejeitados)
+   - Terceiro: `auditoria_aprovados_*.txt` (confirmação de envios)
+
+3. **Reproduza o erro:**
+   - Isole o boleto problemático
+   - Execute apenas ele em MODO_PREVIEW
+   - Observe os logs no console em tempo real
+
+4. **Corrija na origem:**
+   - Erros de CNPJ/Nome/Valor → Atualize ERP (Viasoft)
+   - Erros de Email → Atualize cadastro do cliente
+   - Erros de XML → Solicite novo XML ao fiscal
+
+### Comandos úteis
+
+**Verificar boletos duplicados:**
+```bash
+# Windows (PowerShell)
+Get-ChildItem BoletosEntrada | Group-Object Name | Where-Object {$_.Count -gt 1}
+
+# Linux/Mac
+find BoletosEntrada -type f | sort | uniq -d
+```
+
+**Contar boletos por status:**
+```bash
+# Windows (PowerShell)
+(Get-Content Auditoria\auditoria_*.txt | Select-String "ENVIADO COM SUCESSO").Count
+
+# Linux/Mac
+grep -c "ENVIADO COM SUCESSO" Auditoria/auditoria_*.txt
+```
+
+**Buscar boleto específico nos logs:**
+```bash
+# Windows (PowerShell)
+Select-String -Path "Auditoria\*.txt","Erros\*.txt" -Pattern "310227"
+
+# Linux/Mac
+grep -r "310227" Auditoria/ Erros/
+```
+
+### Quando escalar para suporte técnico
+
+Escale para o desenvolvedor/suporte se:
+
+- [ ] Erro persiste após seguir todas as soluções deste guia
+- [ ] Novo layout de boleto (FIDC desconhecido)
+- [ ] Erro de código Python (stack trace no console)
+- [ ] Comportamento inconsistente (funciona às vezes, falha outras)
+- [ ] Performance muito degradada (>10s por boleto)
+
+**Informações para incluir no ticket:**
+1. Arquivo de log completo (`auditoria_*.json`)
+2. Boleto PDF problemático (se possível)
+3. XML da nota fiscal correspondente
+4. Screenshot do erro (se houver)
+5. Versão do sistema (veja no topo do relatório)

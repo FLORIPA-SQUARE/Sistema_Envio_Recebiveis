@@ -1,0 +1,692 @@
+---
+title: Guia de build e deploy
+description: Como rodar em desenvolvimento, gerar o .exe e instalar no servidor
+---
+
+# Guia de build e deploy
+
+Este guia cobre todo o processo de desenvolvimento, build e deploy do sistema de automação de boletos, desde a configuração local até a instalação no servidor de produção.
+
+## Pré-requisitos
+
+### Software necessário
+
+<CardGroup cols={2}>
+  <Card title="Python 3.8+" icon="python" color="#3776ab">
+    Versão mínima: Python 3.8
+    
+    Recomendado: Python 3.11 ou superior
+  </Card>
+  <Card title="Microsoft Outlook" icon="envelope" color="#0078d4">
+    Instalado e configurado
+    
+    Conta: `cobranca@jotajota.net.br`
+  </Card>
+  <Card title="Git" icon="git-alt" color="#f05032">
+    Para clonar o repositório
+    
+    Opcional mas recomendado
+  </Card>
+  <Card title="Acesso ao servidor" icon="server" color="#107c10">
+    Permissões de leitura/escrita
+    
+    Caminho de rede configurado
+  </Card>
+</CardGroup>
+
+### Dependências Python
+
+O sistema utiliza as seguintes dependências principais (extraídas de `requirements.txt`):
+
+```txt
+# Processamento de PDFs
+pdfplumber==0.11.7
+pdfminer.six==20250506
+pypdfium2==5.0.0
+
+# Integração Windows/Outlook
+pywin32==311
+pywin32-ctypes==0.2.3
+
+# Manipulação de dados
+openpyxl==3.1.5
+Unidecode==1.4.0
+
+# Build e empacotamento
+pyinstaller==6.16.0
+pyinstaller-hooks-contrib==2025.9
+
+# Testes
+pytest==8.4.2
+pytest-cov==7.0.0
+
+# Outras
+pillow==12.0.0
+cryptography==46.0.3
+```
+
+<Note>
+A versão completa do `requirements.txt` contém todas as dependências transitivas. Use `pip install -r requirements.txt` para instalar tudo automaticamente.
+</Note>
+
+## Setup de desenvolvimento
+
+<Steps>
+  <Step title="Clonar o repositório">
+    ```bash
+    git clone https://github.com/FLORIPA-SQUARE/Automacao-de-boletos.git
+    cd Automacao-de-boletos
+    ```
+  </Step>
+
+  <Step title="Criar ambiente virtual">
+    ```bash
+    # Windows
+    python -m venv .venv
+    .venv\Scripts\activate
+
+    # Linux/Mac
+    python3 -m venv .venv
+    source .venv/bin/activate
+    ```
+    
+    <Tip>
+    O ambiente virtual isola as dependências do projeto, evitando conflitos com outros projetos Python no sistema.
+    </Tip>
+  </Step>
+
+  <Step title="Instalar dependências">
+    ```bash
+    pip install --upgrade pip
+    pip install -r requirements.txt
+    ```
+    
+    <Note>
+    A instalação pode demorar 2-5 minutos dependendo da velocidade da internet. O PyInstaller e suas dependências são os pacotes mais pesados.
+    </Note>
+  </Step>
+
+  <Step title="Configurar config.py">
+    Edite o arquivo `config.py` e ajuste o caminho base:
+    
+    ```python
+    # Linha 24 do config.py
+    BASE_DIR = r"C:\Users\SeuUsuario\Desktop\BoletosAutomação"
+    ```
+    
+    Substitua pelo caminho onde você clonou o repositório.
+  </Step>
+
+  <Step title="Criar pastas operacionais">
+    ```bash
+    mkdir BoletosEntrada BoletosRenomeados BoletosEnviados
+    mkdir Notas Auditoria Erros Logs Outros
+    ```
+    
+    <Warning>
+    Estas pastas provavelmente estão no `.gitignore` e não são criadas automaticamente ao clonar. O sistema falhará se elas não existirem.
+    </Warning>
+  </Step>
+
+  <Step title="Adicionar arquivos de teste">
+    - Coloque XMLs de notas fiscais na pasta `Notas/`
+    - Coloque boletos PDF de teste na pasta `BoletosEntrada/`
+    - Adicione imagem de assinatura em `Outros/boletosTeste (temporario)/Imagem1.jpg`
+  </Step>
+
+  <Step title="Executar o sistema">
+    **Opção 1: Interface gráfica**
+    ```bash
+    python InterfaceBoletos.py
+    ```
+    
+    **Opção 2: Scripts diretos**
+    ```bash
+    # Renomear boletos
+    python RenomeaçãoBoletos.py
+    
+    # Enviar boletos
+    python EnvioBoleto.py
+    ```
+    
+    **Opção 3: Atalho batch (Windows)**
+    ```bash
+    Abrir_Sistema.bat
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+Em desenvolvimento, mantenha `MODO_PREVIEW = True` no `config.py`. Isso abre os e-mails no Outlook para revisão manual antes de enviar, evitando envios acidentais durante testes.
+</Tip>
+
+## Diferenças dev vs produção
+
+O sistema possui duas configurações distintas: `config.py` (desenvolvimento) e `config_server.py` (produção). Entenda as diferenças:
+
+### Tabela comparativa
+
+| Aspecto | config.py (Dev) | config_server.py (Produção) |
+|---------|-----------------|----------------------------|
+| **Caminho base** | `C:\Users\User-OEM\Desktop\BoletosAutomação` | Detectado automaticamente (pasta do .exe) |
+| **Estrutura de pastas** | Pastas na raiz: `BoletosEntrada/`, `BoletosRenomeados/`, etc. | Subpastas organizadas: `Boletos/Entrada/`, `Boletos/Renomeados/`, etc. |
+| **Assinatura de e-mail** | `Outros/boletosTeste (temporario)/Imagem1.jpg` | `assinatura.jpg` (na raiz, junto com o .exe) |
+| **Detecção de ambiente** | Caminho hardcoded | Detecta se está rodando como .exe ou .py |
+| **Planilha de controle** | Referenciada mas não usada | Referenciada mas não usada |
+| **Modo de operação** | `MODO_PREVIEW = True` | `MODO_PREVIEW = True` (requer mudança manual para False) |
+
+### Detecção automática de ambiente
+
+O `config_server.py` detecta automaticamente se está rodando como executável ou script Python:
+
+```python
+def obter_base_dir():
+    """
+    Detecta automaticamente o caminho base do sistema.
+    
+    Lógica:
+    1. Se for .exe: usa pasta do executável
+    2. Se for .py: usa pasta do script atual
+    """
+    if getattr(sys, 'frozen', False):
+        # Rodando como .exe (PyInstaller)
+        base = os.path.dirname(sys.executable)
+    else:
+        # Rodando como .py (desenvolvimento)
+        base = os.path.dirname(os.path.abspath(__file__))
+    
+    return base
+```
+
+<Note>
+Esta detecção automática elimina a necessidade de editar caminhos ao mover o sistema entre ambientes. O executável sempre usa a pasta onde está localizado como base.
+</Note>
+
+### Estrutura de pastas em produção
+
+```
+[Pasta do Servidor]/
+├── SistemaBoletosJotaJota.exe   # Executável principal (~36 MB)
+├── assinatura.jpg               # Assinatura de e-mail (46 KB)
+├── Como Usar                    # Manual do operador
+├── Boletos/
+│   ├── Entrada/                 # Boletos originais
+│   ├── Renomeados/              # Boletos processados
+│   └── Enviados/                # Boletos já enviados
+├── Notas/                       # XMLs das notas fiscais
+├── Auditoria/                   # Relatórios de sucesso
+└── Erros/                       # Relatórios de erros
+```
+
+## Gerando o .exe
+
+O processo de build utiliza PyInstaller para empacotar o sistema Python em um executável standalone.
+
+### Comando de build
+
+<Steps>
+  <Step title="Navegar para pasta de build">
+    ```bash
+    cd _build_server
+    ```
+  </Step>
+
+  <Step title="Executar script de build">
+    **Windows:**
+    ```bash
+    gerar_exe.bat
+    ```
+    
+    **Manual (qualquer OS):**
+    ```bash
+    # Ativar ambiente virtual
+    cd ..
+    .venv\Scripts\activate  # Windows
+    # source .venv/bin/activate  # Linux/Mac
+    cd _build_server
+    
+    # Limpar builds anteriores
+    rmdir /s /q build dist  # Windows
+    # rm -rf build dist  # Linux/Mac
+    
+    # Gerar executável
+    pyinstaller build_sistema.spec --clean
+    ```
+  </Step>
+
+  <Step title="Aguardar conclusão">
+    O processo demora **5-10 minutos** dependendo do hardware.
+    
+    Você verá mensagens como:
+    ```
+    [1/5] Limpando builds anteriores...
+    [2/5] Verificando PyInstaller...
+    [3/5] Gerando executavel...
+    (Isso pode demorar 5-10 minutos...)
+    ```
+  </Step>
+
+  <Step title="Verificar resultado">
+    O executável será gerado em:
+    ```
+    _build_server/dist/SistemaBoletosJotaJota.exe
+    ```
+    
+    Tamanho esperado: **~36 MB**
+  </Step>
+</Steps>
+
+### Configuração do PyInstaller
+
+O arquivo `build_sistema.spec` contém toda a configuração do build:
+
+```python
+# Arquivo principal
+['InterfaceBoletos.py']
+
+# Arquivos incluídos no executável
+datas=[
+    ('config_server.py', '.'),
+    ('EnvioBoleto.py', '.'),
+    ('RenomeaçãoBoletos.py', '.'),
+    ('auditoria.py', '.'),
+    ('xml_nfe_reader.py', '.'),
+    ('COMO_USAR.txt', '.'),
+    ('extractors/*.py', 'extractors'),
+]
+
+# Módulos ocultos (não detectados automaticamente)
+hiddenimports=[
+    'win32com.client',      # Integração Outlook
+    'pdfplumber',           # Leitura de PDFs
+    'openpyxl',             # Planilhas Excel
+    'PIL',                  # Imagens
+    'unidecode',            # Normalização de texto
+    'tkinter',              # Interface gráfica
+    # ... outros
+]
+
+# Módulos excluídos (reduzir tamanho)
+excludes=[
+    'matplotlib',
+    'numpy',
+    'scipy',
+    'pandas',
+    'pytest',
+    'jupyter',
+]
+
+# Configurações do executável
+console=False,              # Sem janela de console (GUI)
+upx=False,                  # Desabilitado (evita falsos positivos de antivírus)
+name='SistemaBoletosJotaJota',
+```
+
+### Armadilhas conhecidas
+
+<Warning>
+**Hidden imports não detectados**
+
+O PyInstaller pode não detectar automaticamente alguns módulos. Se o .exe falhar com erro de import, adicione o módulo em `hiddenimports` no `build_sistema.spec`:
+
+```python
+hiddenimports=[
+    'seu_modulo_aqui',
+]
+```
+</Warning>
+
+<Warning>
+**DLLs do Windows faltando**
+
+Se o .exe falhar com erro de DLL faltando (ex: `api-ms-win-*.dll`), instale o **Visual C++ Redistributable**:
+- [Download Microsoft](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)
+
+Ou adicione as DLLs manualmente em `binaries` no `.spec`.
+</Warning>
+
+<Warning>
+**Caminhos hardcoded**
+
+Evite caminhos absolutos no código. Use sempre:
+```python
+import os
+import sys
+
+def obter_base_dir():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+```
+</Warning>
+
+<Warning>
+**Arquivos de dados não incluídos**
+
+Arquivos como imagens, XMLs de exemplo, etc. devem ser explicitamente incluídos em `datas`:
+
+```python
+datas=[
+    ('assinatura.jpg', '.'),
+    ('templates/*.html', 'templates'),
+]
+```
+</Warning>
+
+<Warning>
+**UPX compactação**
+
+O UPX está **desabilitado** (`upx=False`) para evitar falsos positivos de antivírus. Não habilite a menos que seja absolutamente necessário.
+</Warning>
+
+<Warning>
+**Antivírus bloqueando**
+
+Alguns antivírus podem bloquear o .exe gerado. Adicione exceção para:
+- Pasta `_build_server/dist/`
+- Executável `SistemaBoletosJotaJota.exe`
+
+Se persistir, considere assinar digitalmente o executável.
+</Warning>
+
+### Testando o executável
+
+Após gerar o .exe, teste localmente antes de fazer deploy:
+
+```bash
+cd _build_server/dist
+SistemaBoletosJotaJota.exe
+```
+
+<Tip>
+O script `gerar_exe.bat` pergunta se você quer testar o executável imediatamente após o build. Responda "S" para testar.
+</Tip>
+
+## Deploy no servidor
+
+<Steps>
+  <Step title="Preparar estrutura de pastas no servidor">
+    Crie a estrutura de pastas no servidor:
+    
+    ```
+    \\SERVIDOR\Compartilhado\BoletosAutomação\
+    ├── Boletos\
+    │   ├── Entrada\
+    │   ├── Renomeados\
+    │   └── Enviados\
+    ├── Notas\
+    ├── Auditoria\
+    └── Erros\
+    ```
+    
+    <Note>
+    O executável criará as pastas automaticamente se não existirem, mas é recomendado criá-las manualmente para garantir permissões corretas.
+    </Note>
+  </Step>
+
+  <Step title="Copiar arquivos necessários">
+    Copie do ambiente de build para o servidor:
+    
+    ```
+    _build_server/dist/SistemaBoletosJotaJota.exe  →  [Servidor]/
+    _build_server/dist/assinatura.jpg              →  [Servidor]/
+    _build_server/COMO_USAR.txt                    →  [Servidor]/Como Usar
+    ```
+    
+    <Warning>
+    **Não copie** a pasta `_internal/` se ela existir. O PyInstaller com `--onefile` embute tudo no .exe.
+    </Warning>
+  </Step>
+
+  <Step title="Configurar permissões">
+    Garanta que a conta do operador tenha:
+    - **Leitura/Escrita** em todas as pastas
+    - **Execução** no arquivo `.exe`
+    - **Acesso ao Outlook** configurado na máquina
+  </Step>
+
+  <Step title="Criar atalho na área de trabalho">
+    Crie um atalho para facilitar o acesso:
+    
+    **Destino:**
+    ```
+    \\SERVIDOR\Compartilhado\BoletosAutomação\SistemaBoletosJotaJota.exe
+    ```
+    
+    **Nome sugerido:**
+    ```
+    Sistema de Boletos - JJ
+    ```
+  </Step>
+
+  <Step title="Testar com MODO_PREVIEW = True">
+    **Antes de ativar envio automático:**
+    
+    1. Execute o sistema
+    2. Coloque boletos de teste em `Boletos/Entrada/`
+    3. Coloque XMLs correspondentes em `Notas/`
+    4. Execute renomeação e envio
+    5. Verifique se os e-mails abrem corretamente no Outlook
+    6. **NÃO envie** os e-mails de teste
+    
+    <Warning>
+    Mantenha `MODO_PREVIEW = True` até validar completamente o sistema em produção. Mudar para `False` ativa envio automático.
+    </Warning>
+  </Step>
+
+  <Step title="Validar com operador">
+    Treine o operador:
+    - Como colocar boletos na pasta de entrada
+    - Como executar o sistema
+    - Como interpretar logs e relatórios
+    - O que fazer em caso de erros
+    
+    Documente o processo no arquivo "Como Usar".
+  </Step>
+</Steps>
+
+### Estrutura final no servidor
+
+```
+\\SERVIDOR\Compartilhado\BoletosAutomação\
+├── SistemaBoletosJotaJota.exe   # ~36 MB
+├── assinatura.jpg               # 46 KB
+├── Como Usar                    # Manual do operador
+├── Boletos\
+│   ├── Entrada\                 # Operador coloca boletos aqui
+│   ├── Renomeados\              # Sistema move após renomear
+│   └── Enviados\                # Sistema move após enviar
+├── Notas\                       # XMLs das notas fiscais
+├── Auditoria\                   # Relatórios de sucesso
+│   └── auditoria_YYYYMMDD_HHMMSS.txt
+└── Erros\                       # Relatórios de erros
+    └── erros_YYYYMMDD_HHMMSS.txt
+```
+
+### Configuração do Outlook no servidor
+
+O sistema requer que o Outlook esteja:
+1. **Instalado** na máquina do servidor
+2. **Configurado** com a conta `cobranca@jotajota.net.br`
+3. **Aberto** durante a execução do sistema (ou configurado para abrir automaticamente)
+
+<Note>
+O sistema usa `win32com.client` para integração COM com o Outlook. Não funciona com Outlook Web ou outros clientes de e-mail.
+</Note>
+
+## Atualizações
+
+Processo recomendado para atualizar o sistema em produção:
+
+<Steps>
+  <Step title="Fazer backup completo">
+    Antes de qualquer atualização, faça backup de:
+    
+    ```bash
+    # Backup do executável atual
+    copy SistemaBoletosJotaJota.exe SistemaBoletosJotaJota.exe.backup_YYYYMMDD
+    
+    # Backup da configuração (se houver)
+    copy config_server.py config_server.py.backup_YYYYMMDD
+    
+    # Backup dos dados (opcional, mas recomendado)
+    xcopy /E /I Auditoria Auditoria_backup_YYYYMMDD
+    ```
+  </Step>
+
+  <Step title="Testar mudanças em desenvolvimento">
+    1. Faça as alterações no código
+    2. Teste localmente com dados reais (cópias)
+    3. Execute testes unitários:
+       ```bash
+       pytest _build_server/tests/
+       ```
+    4. Valide com operador em ambiente de teste
+  </Step>
+
+  <Step title="Gerar novo executável">
+    ```bash
+    cd _build_server
+    gerar_exe.bat
+    ```
+    
+    Verifique:
+    - Tamanho do .exe (~36 MB)
+    - Sem erros de build
+    - Teste local antes de fazer deploy
+  </Step>
+
+  <Step title="Agendar janela de manutenção">
+    Coordene com a equipe de cobrança:
+    - Escolha horário de baixo movimento
+    - Notifique operadores com antecedência
+    - Tenha plano de rollback pronto
+  </Step>
+
+  <Step title="Substituir no servidor">
+    ```bash
+    # 1. Fechar sistema em execução (se estiver aberto)
+    # 2. Substituir executável
+    copy _build_server\dist\SistemaBoletosJotaJota.exe \\SERVIDOR\Compartilhado\BoletosAutomação\
+    
+    # 3. Substituir assinatura (se mudou)
+    copy _build_server\dist\assinatura.jpg \\SERVIDOR\Compartilhado\BoletosAutomação\
+    ```
+  </Step>
+
+  <Step title="Testar em produção">
+    1. Execute o sistema
+    2. Processe 1-2 boletos de teste
+    3. Verifique logs de auditoria
+    4. Confirme que e-mails abrem corretamente
+    5. Valide com operador
+  </Step>
+
+  <Step title="Monitorar primeiras execuções">
+    Acompanhe as primeiras execuções reais:
+    - Verifique relatórios de auditoria
+    - Monitore pasta de erros
+    - Esteja disponível para suporte
+  </Step>
+</Steps>
+
+### Rollback em caso de problemas
+
+Se algo der errado após atualização:
+
+```bash
+# 1. Restaurar executável anterior
+copy SistemaBoletosJotaJota.exe.backup_YYYYMMDD SistemaBoletosJotaJota.exe
+
+# 2. Restaurar configuração (se necessário)
+copy config_server.py.backup_YYYYMMDD config_server.py
+
+# 3. Testar sistema restaurado
+SistemaBoletosJotaJota.exe
+```
+
+<Warning>
+Sempre mantenha pelo menos 2 versões anteriores do executável como backup. Delete backups antigos apenas após confirmar que a nova versão está estável por pelo menos 1 semana.
+</Warning>
+
+### Versionamento
+
+Recomendações para controle de versão:
+
+1. **Use Git tags** para marcar releases:
+   ```bash
+   git tag -a v1.0.0 -m "Release 1.0.0 - Sistema estável"
+   git push origin v1.0.0
+   ```
+
+2. **Nomeie executáveis com versão** durante testes:
+   ```
+   SistemaBoletosJotaJota_v1.0.0.exe
+   ```
+
+3. **Mantenha changelog** documentando mudanças:
+   ```markdown
+   ## v1.1.0 (2025-02-15)
+   - Adicionado suporte para FIDC Squid
+   - Corrigido bug de validação de CNPJ
+   - Melhorado desempenho de extração de PDFs
+   ```
+
+4. **Documente breaking changes** que exigem ação do operador
+
+## Troubleshooting
+
+### Erro: "PyInstaller não encontrado"
+
+```bash
+pip install pyinstaller
+```
+
+### Erro: "Módulo X não encontrado" no .exe
+
+Adicione o módulo em `hiddenimports` no `build_sistema.spec`:
+
+```python
+hiddenimports=[
+    'modulo_faltando',
+]
+```
+
+Regere o .exe.
+
+### Erro: "Outlook não está instalado"
+
+O sistema requer Microsoft Outlook instalado e configurado. Não funciona com:
+- Outlook Web
+- Thunderbird
+- Outros clientes de e-mail
+
+### .exe muito grande (>50 MB)
+
+Verifique se módulos desnecessários estão sendo incluídos. Adicione em `excludes`:
+
+```python
+excludes=[
+    'matplotlib',
+    'numpy',
+    'scipy',
+    'pandas',
+]
+```
+
+### Antivírus bloqueando .exe
+
+1. Adicione exceção no antivírus
+2. Considere assinar digitalmente o executável
+3. Verifique se `upx=False` no `.spec` (já está)
+
+### Sistema não encontra pastas
+
+Verifique se `config_server.py` está sendo usado (não `config.py`). O executável deve usar `config_server.py` automaticamente.
+
+Se persistir, adicione logs de debug:
+
+```python
+print(f"BASE_DIR: {BASE_DIR}")
+print(f"PASTA_ENTRADA: {PASTA_ENTRADA}")
+```

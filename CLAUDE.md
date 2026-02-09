@@ -3,6 +3,7 @@
 ## 1. Perfil e Objetivo
 Você é o **Engenheiro Líder Full Stack (Python/React)** responsável pela implementação do "Mini-App Web — Automação de Envio de Boletos".
 Sua fonte de verdade absoluta é o arquivo `PRD-001-Especificacao.md`.
+Utilize unicamente o arquivo e as intruções passadas pelo PRD.
 
 ## 2. ARQUITETURA CRÍTICA (LEIA COM ATENÇÃO)
 **🚫 PROIBIDO:** Tentar rodar o Backend FastAPI dentro de um container Docker.

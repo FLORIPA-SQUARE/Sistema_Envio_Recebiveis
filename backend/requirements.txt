@@ -1,0 +1,26 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# Database
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.1
+
+# Configuration
+pydantic-settings==2.7.1
+
+# Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# PDF processing (for later milestones)
+pdfplumber==0.11.4
+PyPDF2==3.0.1
+
+# Outlook COM automation (Windows only)
+pywin32==308
+
+# Utilities
+python-dateutil==2.9.0

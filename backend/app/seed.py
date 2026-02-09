@@ -1,0 +1,95 @@
+"""Seed script — populates 4 FIDCs and 1 default user.
+
+Run: python -m app.seed  (from backend/ directory)
+"""
+
+import asyncio
+import sys
+from pathlib import Path
+
+# Ensure backend/ is in path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from sqlalchemy import select
+
+from app.config import settings
+from app.database import async_session
+from app.models.fidc import Fidc
+from app.models.usuario import Usuario
+from app.security import hash_password
+
+FIDCS_SEED = [
+    {
+        "nome": "CAPITAL",
+        "nome_completo": "CAPITAL RS FIDC NP MULTISSETORIAL",
+        "cnpj": "12.910.463/0001-70",
+        "cc_emails": ["adm@jotajota.net.br"],
+        "palavras_chave": ["CAPITAL RS", "CAPITAL RS FIDC"],
+        "cor": "#0e639c",
+    },
+    {
+        "nome": "NOVAX",
+        "nome_completo": "Novax Fundo de Investimento em Direitos Creditórios",
+        "cnpj": "28.879.551/0001-96",
+        "cc_emails": ["adm@jotajota.net.br", "controladoria@novaxfidc.com.br"],
+        "palavras_chave": ["NOVAX"],
+        "cor": "#107c10",
+    },
+    {
+        "nome": "CREDVALE",
+        "nome_completo": "CREDVALE FUNDO DE INVESTIMENTO EM DIREITOS CREDITORIOS MULTISSETORIAL",
+        "cnpj": "",
+        "cc_emails": ["adm@jotajota.net.br", "nichole@credvalefidc.com.br"],
+        "palavras_chave": ["CREDVALE", "CREDIT VALLEY"],
+        "cor": "#d83b01",
+    },
+    {
+        "nome": "SQUID",
+        "nome_completo": "SQUID FUNDO DE INVESTIMENTO EM DIREITOS CREDITORIOS",
+        "cnpj": "",
+        "cc_emails": ["adm@jotajota.net.br"],
+        "palavras_chave": ["SQUID"],
+        "cor": "#8764b8",
+    },
+]
+
+DEFAULT_USER = {
+    "nome": "Administrador",
+    "email": "admin@jotajota.net.br",
+    "senha": "admin123",
+}
+
+
+async def seed():
+    async with async_session() as session:
+        # Seed FIDCs
+        for fidc_data in FIDCS_SEED:
+            result = await session.execute(select(Fidc).where(Fidc.nome == fidc_data["nome"]))
+            existing = result.scalar_one_or_none()
+            if not existing:
+                session.add(Fidc(**fidc_data))
+                print(f"  [+] FIDC criado: {fidc_data['nome']}")
+            else:
+                print(f"  [=] FIDC já existe: {fidc_data['nome']}")
+
+        # Seed default user
+        result = await session.execute(select(Usuario).where(Usuario.email == DEFAULT_USER["email"]))
+        existing_user = result.scalar_one_or_none()
+        if not existing_user:
+            session.add(
+                Usuario(
+                    nome=DEFAULT_USER["nome"],
+                    email=DEFAULT_USER["email"],
+                    senha_hash=hash_password(DEFAULT_USER["senha"]),
+                )
+            )
+            print(f"  [+] Usuário criado: {DEFAULT_USER['email']}")
+        else:
+            print(f"  [=] Usuário já existe: {DEFAULT_USER['email']}")
+
+        await session.commit()
+        print("\nSeed concluído!")
+
+
+if __name__ == "__main__":
+    asyncio.run(seed())

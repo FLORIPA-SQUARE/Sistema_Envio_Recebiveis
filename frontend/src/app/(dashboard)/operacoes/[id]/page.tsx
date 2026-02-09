@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import {
@@ -203,6 +203,8 @@ export default function OperacaoDetailPage() {
   const [envioResult, setEnvioResult] = useState<EnvioResultado | null>(null);
   const [envios, setEnvios] = useState<EnvioRecord[]>([]);
   const [enviosLoading, setEnviosLoading] = useState(false);
+  const [verificarLoading, setVerificarLoading] = useState(false);
+  const [marcarEnviadoId, setMarcarEnviadoId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOperacao();
@@ -316,6 +318,40 @@ export default function OperacaoDetailPage() {
       `/api/v1/operacoes/${opId}/relatorio?formato=${formato}&token=${token}`,
       "_blank"
     );
+  }
+
+  async function handleVerificarStatus() {
+    setVerificarLoading(true);
+    try {
+      const data = await apiFetch<{ verificados: number; atualizados: number }>(
+        `/operacoes/${opId}/envios/verificar-status`,
+        { method: "POST" }
+      );
+      if (data.atualizados > 0) {
+        toast.success(`${data.atualizados} de ${data.verificados} envio(s) atualizado(s) para "enviado"`);
+      } else {
+        toast.info(`${data.verificados} rascunho(s) verificado(s), nenhum encontrado nos Itens Enviados`);
+      }
+      await fetchEnvios();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao verificar status");
+    } finally {
+      setVerificarLoading(false);
+    }
+  }
+
+  async function handleMarcarEnviado(envioId: string) {
+    setMarcarEnviadoId(null);
+    try {
+      await apiFetch(`/operacoes/${opId}/envios/${envioId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "enviado" }),
+      });
+      toast.success("Envio marcado como enviado");
+      await fetchEnvios();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao atualizar status");
+    }
   }
 
   function formatDate(dateStr: string) {
@@ -565,9 +601,8 @@ export default function OperacaoDetailPage() {
                   </TableHeader>
                   <TableBody>
                     {operacao.boletos.map((boleto) => (
-                      <>
+                      <Fragment key={boleto.id}>
                         <TableRow
-                          key={boleto.id}
                           className="cursor-pointer hover:bg-muted/50"
                           onClick={() =>
                             setExpandedBoleto(
@@ -639,7 +674,7 @@ export default function OperacaoDetailPage() {
                             </TableCell>
                           </TableRow>
                         )}
-                      </>
+                      </Fragment>
                     ))}
                   </TableBody>
                 </Table>
@@ -863,11 +898,27 @@ export default function OperacaoDetailPage() {
 
           {/* Historico de envios */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
                 <Mail className="h-4 w-4" />
                 Historico de Envios
               </CardTitle>
+              {envios.some((e) => e.status === "rascunho") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleVerificarStatus}
+                  disabled={verificarLoading}
+                  className="gap-2"
+                >
+                  {verificarLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  Verificar Status
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {enviosLoading ? (
@@ -881,12 +932,14 @@ export default function OperacaoDetailPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Data</TableHead>
+                      <TableHead>Criado em</TableHead>
+                      <TableHead>Enviado em</TableHead>
                       <TableHead>Destinatario</TableHead>
                       <TableHead>Assunto</TableHead>
                       <TableHead>Modo</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-center">Anexos</TableHead>
+                      <TableHead className="text-center">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -894,6 +947,9 @@ export default function OperacaoDetailPage() {
                       <TableRow key={envio.id}>
                         <TableCell className="text-sm whitespace-nowrap">
                           {formatDate(envio.created_at)}
+                        </TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">
+                          {envio.timestamp_envio ? formatDate(envio.timestamp_envio) : "—"}
                         </TableCell>
                         <TableCell className="text-sm max-w-[200px] truncate">
                           {envio.email_para.join(", ")}
@@ -924,6 +980,21 @@ export default function OperacaoDetailPage() {
                         </TableCell>
                         <TableCell className="text-center font-[family-name:var(--font-barlow-condensed)]">
                           {envio.boletos_ids.length + envio.xmls_anexados.length}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {envio.status === "rascunho" ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setMarcarEnviadoId(envio.id)}
+                              className="h-8 w-8 text-success hover:text-success"
+                              title="Marcar como enviado"
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1013,6 +1084,30 @@ export default function OperacaoDetailPage() {
             <Button onClick={handleEnviar} disabled={envioLoading} className="gap-2">
               <Send className="h-4 w-4" />
               Confirmar Envio
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={marcarEnviadoId !== null} onOpenChange={() => setMarcarEnviadoId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Marcar como Enviado</DialogTitle>
+            <DialogDescription>
+              Confirma que este email foi enviado manualmente pelo Outlook?
+              O status sera atualizado de &quot;rascunho&quot; para &quot;enviado&quot;.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setMarcarEnviadoId(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => marcarEnviadoId && handleMarcarEnviado(marcarEnviadoId)}
+              className="gap-2"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Confirmar
             </Button>
           </div>
         </DialogContent>

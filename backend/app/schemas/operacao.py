@@ -178,3 +178,21 @@ class EnvioResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class EnvioStatusUpdate(BaseModel):
+    status: str  # "enviado"
+
+
+class VerificarStatusItem(BaseModel):
+    envio_id: uuid.UUID
+    assunto: str
+    status_anterior: str
+    status_novo: str
+    encontrado_enviados: bool
+
+
+class VerificarStatusResultado(BaseModel):
+    verificados: int
+    atualizados: int
+    itens: list[VerificarStatusItem]

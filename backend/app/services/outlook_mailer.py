@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Constantes COM do Outlook
 OL_MAIL_ITEM = 0  # olMailItem
+OL_FOLDER_SENT_MAIL = 5  # olFolderSentMail
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0  # seconds
 
@@ -133,3 +135,79 @@ class OutlookMailer:
                         f"Outlook nao respondeu ao enviar email. Erro: {e}"
                     )
         return False
+
+    def verificar_itens_enviados(
+        self,
+        envios_pendentes: list[tuple[str, list[str]]],
+    ) -> dict[str, bool]:
+        """Verifica na pasta Itens Enviados do Outlook se rascunhos foram enviados.
+
+        Args:
+            envios_pendentes: Lista de (assunto, [emails_destinatarios])
+
+        Returns:
+            Dict {assunto: True/False} indicando se foi encontrado nos enviados.
+        """
+        resultado: dict[str, bool] = {}
+        for assunto, _ in envios_pendentes:
+            resultado[assunto] = False
+
+        if not envios_pendentes:
+            return resultado
+
+        try:
+            outlook = self._get_outlook()
+            namespace = outlook.GetNamespace("MAPI")
+            sent_folder = namespace.GetDefaultFolder(OL_FOLDER_SENT_MAIL)
+
+            # Iterar os itens mais recentes sem filtro de data (mais confiavel cross-locale)
+            itens = sent_folder.Items
+            itens.Sort("[SentOn]", True)  # Mais recentes primeiro
+
+            data_corte = datetime.now() - timedelta(hours=48)
+            assuntos_enviados: list[str] = []
+            count = 0
+
+            for item in itens:
+                try:
+                    sent_on = item.SentOn
+                    # pywin32 retorna pywintypes.datetime — converter para comparacao
+                    if hasattr(sent_on, "timestamp"):
+                        item_dt = datetime.fromtimestamp(sent_on.timestamp())
+                    else:
+                        item_dt = datetime(
+                            sent_on.year, sent_on.month, sent_on.day,
+                            sent_on.hour, sent_on.minute, sent_on.second,
+                        )
+
+                    if item_dt < data_corte:
+                        break  # Ja passou do limite de 48h (lista ordenada desc)
+
+                    assuntos_enviados.append(item.Subject)
+                    count += 1
+                    if count >= 200:  # Limite de seguranca
+                        break
+                except Exception:
+                    continue
+
+            logger.info(
+                "Verificacao Sent Items: %d emails nas ultimas 48h", len(assuntos_enviados)
+            )
+            for subj in assuntos_enviados[:10]:
+                logger.info("  Sent Item: %s", subj)
+
+            # Buscar pendentes
+            for assunto, _ in envios_pendentes:
+                logger.info("  Procurando: '%s'", assunto)
+                if assunto in assuntos_enviados:
+                    resultado[assunto] = True
+                    logger.info(
+                        "Rascunho encontrado nos Itens Enviados: %s", assunto
+                    )
+
+        except ImportError:
+            logger.warning("pywin32 nao instalado — verificacao ignorada")
+        except Exception as e:
+            logger.warning("Erro ao verificar Itens Enviados: %s", e)
+
+        return resultado

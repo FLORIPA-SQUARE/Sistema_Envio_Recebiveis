@@ -23,7 +23,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -258,12 +257,12 @@ export default function NovaOperacaoPage() {
 
       {/* Steps indicator */}
       {!addingToExisting && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {["config", "upload", "result"].map((s, i) => (
-            <div key={s} className="flex items-center gap-2">
-              {i > 0 && <Separator className="w-8" />}
+            <div key={s} className="flex items-center gap-3">
+              {i > 0 && <div className="h-px w-8 bg-border" />}
               <div
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
                   step === s
                     ? "bg-primary text-primary-foreground"
                     : s === "result" && step !== "result"
@@ -273,7 +272,7 @@ export default function NovaOperacaoPage() {
               >
                 {i + 1}
               </div>
-              <span className="text-sm font-medium capitalize">{s === "config" ? "Configurar" : s === "upload" ? "Upload" : "Resultado"}</span>
+              <span className="text-sm font-medium">{s === "config" ? "Configurar" : s === "upload" ? "Upload" : "Resultado"}</span>
             </div>
           ))}
         </div>

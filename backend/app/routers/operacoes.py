@@ -15,6 +15,8 @@ Endpoints:
   POST   /operacoes/{id}/cancelar        — Cancelar operacao
   POST   /operacoes/{id}/enviar          — Enviar emails via Outlook (preview/automatico)
   GET    /operacoes/{id}/envios          — Listar envios da operacao
+  POST   /operacoes/{id}/envios/verificar-status — Verificar se rascunhos foram enviados
+  PATCH  /operacoes/{id}/envios/{eid}/status     — Marcar envio como enviado manualmente
   GET    /operacoes/{id}/relatorio       — Download de relatorio (TXT/JSON)
 """
 
@@ -55,6 +57,7 @@ from app.schemas.operacao import (
     EnvioRequest,
     EnvioResponse,
     EnvioResultado,
+    EnvioStatusUpdate,
     OperacaoCreate,
     OperacaoDetalhada,
     OperacaoFinalizada,
@@ -63,6 +66,8 @@ from app.schemas.operacao import (
     ResultadoProcessamento,
     UploadBoletosResponse,
     UploadXmlsResponse,
+    VerificarStatusItem,
+    VerificarStatusResultado,
     XmlResumo,
 )
 from app.schemas.fidc import FidcResponse
@@ -1054,6 +1059,120 @@ async def listar_envios(
     envios = result.scalars().all()
 
     return [EnvioResponse.model_validate(e) for e in envios]
+
+
+# ── POST /operacoes/{id}/envios/verificar-status ─────────────
+
+
+@router.post("/{op_id}/envios/verificar-status", response_model=VerificarStatusResultado)
+async def verificar_status_envios(
+    op_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Verifica na pasta Itens Enviados do Outlook se rascunhos foram enviados."""
+    await _get_operacao(op_id, db)
+
+    # Buscar envios com status rascunho
+    result = await db.execute(
+        select(Envio)
+        .where(Envio.operacao_id == op_id, Envio.status == "rascunho")
+    )
+    rascunhos = result.scalars().all()
+
+    if not rascunhos:
+        return VerificarStatusResultado(verificados=0, atualizados=0, itens=[])
+
+    # Montar lista para verificacao COM
+    from app.services.outlook_mailer import OutlookMailer
+
+    mailer = OutlookMailer()
+    pendentes = [(r.assunto, r.email_para) for r in rascunhos]
+    encontrados = mailer.verificar_itens_enviados(pendentes)
+
+    # Atualizar status dos encontrados
+    itens: list[VerificarStatusItem] = []
+    atualizados = 0
+
+    for rascunho in rascunhos:
+        encontrado = encontrados.get(rascunho.assunto, False)
+        status_novo = "enviado" if encontrado else "rascunho"
+
+        if encontrado:
+            rascunho.status = "enviado"
+            rascunho.timestamp_envio = datetime.now(timezone.utc)
+            atualizados += 1
+
+            await registrar_audit(
+                db,
+                acao="envio_status_atualizado",
+                operacao_id=uuid.UUID(op_id),
+                usuario_id=current_user.id,
+                entidade="envio",
+                entidade_id=str(rascunho.id),
+                detalhes={"de": "rascunho", "para": "enviado", "via": "outlook_check"},
+            )
+
+        itens.append(VerificarStatusItem(
+            envio_id=rascunho.id,
+            assunto=rascunho.assunto,
+            status_anterior="rascunho",
+            status_novo=status_novo,
+            encontrado_enviados=encontrado,
+        ))
+
+    await db.commit()
+
+    return VerificarStatusResultado(
+        verificados=len(rascunhos),
+        atualizados=atualizados,
+        itens=itens,
+    )
+
+
+# ── PATCH /operacoes/{id}/envios/{envio_id}/status ──────────
+
+
+@router.patch("/{op_id}/envios/{envio_id}/status", response_model=EnvioResponse)
+async def atualizar_status_envio(
+    op_id: str,
+    envio_id: str,
+    body: EnvioStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Marca manualmente um envio como enviado."""
+    await _get_operacao(op_id, db)
+
+    result = await db.execute(
+        select(Envio).where(Envio.id == envio_id, Envio.operacao_id == op_id)
+    )
+    envio = result.scalar_one_or_none()
+    if not envio:
+        raise HTTPException(status_code=404, detail="Envio nao encontrado")
+
+    if envio.status == body.status:
+        return EnvioResponse.model_validate(envio)
+
+    status_anterior = envio.status
+    envio.status = body.status
+    if body.status == "enviado":
+        envio.timestamp_envio = datetime.now(timezone.utc)
+
+    await registrar_audit(
+        db,
+        acao="envio_status_manual",
+        operacao_id=uuid.UUID(op_id),
+        usuario_id=current_user.id,
+        entidade="envio",
+        entidade_id=str(envio.id),
+        detalhes={"de": status_anterior, "para": body.status, "via": "manual"},
+    )
+
+    await db.commit()
+    await db.refresh(envio)
+
+    return EnvioResponse.model_validate(envio)
 
 
 # ── GET /operacoes/{id}/relatorio ────────────────────────────

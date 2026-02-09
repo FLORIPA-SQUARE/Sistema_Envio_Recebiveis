@@ -114,13 +114,19 @@ def agrupar_boletos_para_envio(
                 if pdf_path.exists():
                     anexos_pdf.append(pdf_path)
 
-            # XML correspondente
+            # Nota fiscal correspondente (prioriza PDF sobre XML)
             if xml and str(xml.id) not in xmls_ids_set:
                 xmls_ids_set.add(str(xml.id))
                 xmls_nomes.append(xml.nome_arquivo)
-                xml_path = storage_base / "xmls" / xml.nome_arquivo
-                if xml_path.exists():
-                    anexos_xml_set[str(xml.id)] = xml_path
+                nf_dir = storage_base / "xmls"
+                nf_stem = Path(xml.nome_arquivo).stem
+                # Priorizar PDF da NF sobre XML
+                nf_pdf = nf_dir / f"{nf_stem}.pdf"
+                nf_xml = nf_dir / xml.nome_arquivo
+                if nf_pdf.exists():
+                    anexos_xml_set[str(xml.id)] = nf_pdf
+                elif nf_xml.exists():
+                    anexos_xml_set[str(xml.id)] = nf_xml
 
             # Nome do cliente (usar do XML se disponivel)
             if not nome_cliente:

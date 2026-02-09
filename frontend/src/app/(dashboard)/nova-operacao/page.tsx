@@ -322,7 +322,7 @@ export default function NovaOperacaoPage() {
               </TabsTrigger>
               <TabsTrigger value="xmls" className="gap-2">
                 <FileCode className="h-4 w-4" />
-                XMLs NFe
+                Notas Fiscais PDF
               </TabsTrigger>
             </TabsList>
 
@@ -344,9 +344,9 @@ export default function NovaOperacaoPage() {
               <Card>
                 <CardContent className="pt-6">
                   <FileDropzone
-                    accept=".xml"
-                    label="Arraste XMLs de NFe aqui"
-                    icon="xml"
+                    accept=".xml,.pdf"
+                    label="Arraste Notas Fiscais (PDF ou XML) aqui"
+                    icon="pdf"
                     files={xmlFiles}
                     onFilesChange={setXmlFiles}
                   />

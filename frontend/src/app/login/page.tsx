@@ -26,8 +26,8 @@ interface LoginResponse {
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [senha, setSenha] = useState("");
+  const [email, setEmail] = useState("admin@jotajota.net.br");
+  const [senha, setSenha] = useState("admin123");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 

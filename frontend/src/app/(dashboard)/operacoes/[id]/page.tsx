@@ -39,6 +39,7 @@ import {
   RefreshCw,
   CheckCheck,
   Ban,
+  Trash2,
   Download,
   ChevronDown,
   ChevronUp,
@@ -195,7 +196,7 @@ export default function OperacaoDetailPage() {
   const [loading, setLoading] = useState(true);
   const [expandedBoleto, setExpandedBoleto] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [confirmDialog, setConfirmDialog] = useState<"finalizar" | "cancelar" | "envio_auto" | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<"finalizar" | "cancelar" | "excluir" | "envio_auto" | null>(null);
   const [envioMode, setEnvioMode] = useState<"preview" | "automatico">("preview");
   const [envioLoading, setEnvioLoading] = useState(false);
   const [envioResult, setEnvioResult] = useState<EnvioResultado | null>(null);
@@ -289,6 +290,20 @@ export default function OperacaoDetailPage() {
       await fetchOperacao();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao cancelar");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleExcluir() {
+    setActionLoading(true);
+    setConfirmDialog(null);
+    try {
+      await apiFetch(`/operacoes/${opId}`, { method: "DELETE" });
+      toast.success("Operacao excluida com sucesso");
+      router.push("/historico");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao excluir");
     } finally {
       setActionLoading(false);
     }
@@ -431,6 +446,16 @@ export default function OperacaoDetailPage() {
               </Button>
             </>
           )}
+          <Button
+            variant="destructive"
+            onClick={() => setConfirmDialog("excluir")}
+            disabled={actionLoading}
+            className="gap-2"
+            size="icon"
+            title="Excluir operacao"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
@@ -932,6 +957,26 @@ export default function OperacaoDetailPage() {
             </Button>
             <Button variant="destructive" onClick={handleCancelar} disabled={actionLoading}>
               Confirmar Cancelamento
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmDialog === "excluir"} onOpenChange={() => setConfirmDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir Operacao</DialogTitle>
+            <DialogDescription>
+              Esta acao vai excluir permanentemente a operacao {operacao.numero} e todos os dados
+              relacionados (boletos, XMLs, envios, logs). Esta acao nao pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setConfirmDialog(null)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleExcluir} disabled={actionLoading}>
+              Excluir Permanentemente
             </Button>
           </div>
         </DialogContent>

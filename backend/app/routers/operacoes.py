@@ -6,6 +6,7 @@ Endpoints:
   GET    /operacoes                      — Listar (paginado)
   GET    /operacoes/dashboard/stats      — KPIs agregados
   GET    /operacoes/{id}                 — Detalhes com boletos + XMLs
+  DELETE /operacoes/{id}                 — Excluir operacao e dados relacionados
   POST   /operacoes/{id}/boletos/upload  — Upload PDFs (multipart + auto-split)
   POST   /operacoes/{id}/xmls/upload     — Upload XMLs (batch)
   POST   /operacoes/{id}/processar       — Extracao + renomeacao + validacao 5 camadas
@@ -25,7 +26,7 @@ from pathlib import Path
 import pdfplumber
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -43,6 +44,7 @@ from app.models.fidc import Fidc
 from app.models.operacao import Operacao
 from app.models.usuario import Usuario
 from app.models.xml_nfe import XmlNfe
+from app.models.audit_log import AuditLog
 from app.models.envio import Envio
 from app.schemas.operacao import (
     BoletoCompleto,
@@ -297,6 +299,13 @@ async def upload_boletos(
     _current_user: Usuario = Depends(get_current_user),
 ):
     op = await _get_operacao(op_id, db)
+
+    # Verificar duplicatas — buscar nomes de arquivos ja enviados
+    existing = await db.execute(
+        select(Boleto.arquivo_original).where(Boleto.operacao_id == op.id)
+    )
+    existing_names = {row[0] for row in existing.all()}
+
     op_dir = _operacao_dir(op.id)
     boletos_dir = op_dir / "boletos"
     split_dir = op_dir / "boletos_split"
@@ -312,6 +321,13 @@ async def upload_boletos(
             raise HTTPException(
                 status_code=400,
                 detail=f"Formato invalido: {file.filename}. Apenas arquivos PDF sao aceitos.",
+            )
+
+        # Verificar duplicata
+        if file.filename in existing_names:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Arquivo duplicado: {file.filename} ja foi enviado nesta operacao.",
             )
 
         # Salva arquivo original
@@ -356,6 +372,13 @@ async def upload_xmls(
     _current_user: Usuario = Depends(get_current_user),
 ):
     op = await _get_operacao(op_id, db)
+
+    # Verificar duplicatas — buscar nomes de arquivos ja enviados
+    existing_nf = await db.execute(
+        select(XmlNfe.nome_arquivo).where(XmlNfe.operacao_id == op.id)
+    )
+    existing_nf_names = {row[0] for row in existing_nf.all()}
+
     op_dir = _operacao_dir(op.id)
     xmls_dir = op_dir / "xmls"
     xmls_dir.mkdir(parents=True, exist_ok=True)
@@ -365,41 +388,73 @@ async def upload_xmls(
     invalidos = 0
 
     for file in files:
-        # Validação: apenas XML
-        if not file.filename or not file.filename.lower().endswith(".xml"):
+        # Validação: XML ou PDF
+        if not file.filename or not file.filename.lower().endswith((".xml", ".pdf")):
             raise HTTPException(
                 status_code=400,
-                detail=f"Formato invalido: {file.filename}. Apenas arquivos XML sao aceitos.",
+                detail=f"Formato invalido: {file.filename}. Apenas arquivos XML ou PDF sao aceitos.",
+            )
+
+        # Verificar duplicata
+        if file.filename in existing_nf_names:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Arquivo duplicado: {file.filename} ja foi enviado nesta operacao.",
             )
 
         # Salva arquivo
-        xml_path = xmls_dir / file.filename
+        nf_path = xmls_dir / file.filename
         content = await file.read()
-        xml_path.write_bytes(content)
+        nf_path.write_bytes(content)
 
-        # Parse XML NFe
-        dados = parse_xml_nfe(xml_path)
+        is_pdf = file.filename.lower().endswith(".pdf")
 
-        xml_record = XmlNfe(
-            operacao_id=op.id,
-            nome_arquivo=file.filename,
-            numero_nota=dados.numero_nota,
-            cnpj=dados.cnpj,
-            nome_destinatario=dados.nome_destinatario,
-            valor_total=dados.valor_total,
-            emails=dados.emails,
-            emails_invalidos=dados.emails_invalidos,
-            duplicatas=dados.duplicatas,
-            xml_valido=dados.xml_valido,
-            dados_raw=dados.dados_raw,
-        )
-        db.add(xml_record)
-        await db.flush()
+        if is_pdf:
+            # PDF de nota fiscal — salvar como anexo sem parse
+            # Extrair numero da nota do nome do arquivo (ex: 3-0318865.pdf → 0318865)
+            stem = nf_path.stem
+            numero_nota = stem.split("-")[-1] if "-" in stem else stem
 
-        if dados.xml_valido:
+            xml_record = XmlNfe(
+                operacao_id=op.id,
+                nome_arquivo=file.filename,
+                numero_nota=numero_nota,
+                cnpj=None,
+                nome_destinatario=None,
+                valor_total=None,
+                emails=[],
+                emails_invalidos=[],
+                duplicatas=[],
+                xml_valido=True,
+                dados_raw={},
+            )
+            db.add(xml_record)
+            await db.flush()
             validos += 1
         else:
-            invalidos += 1
+            # Parse XML NFe
+            dados = parse_xml_nfe(nf_path)
+
+            xml_record = XmlNfe(
+                operacao_id=op.id,
+                nome_arquivo=file.filename,
+                numero_nota=dados.numero_nota,
+                cnpj=dados.cnpj,
+                nome_destinatario=dados.nome_destinatario,
+                valor_total=dados.valor_total,
+                emails=dados.emails,
+                emails_invalidos=dados.emails_invalidos,
+                duplicatas=dados.duplicatas,
+                xml_valido=dados.xml_valido,
+                dados_raw=dados.dados_raw,
+            )
+            db.add(xml_record)
+            await db.flush()
+
+            if dados.xml_valido:
+                validos += 1
+            else:
+                invalidos += 1
 
         xmls_result.append(XmlResumo.model_validate(xml_record))
 
@@ -784,6 +839,37 @@ async def cancelar_operacao(
     resp = OperacaoResponse.model_validate(op)
     resp.fidc_nome = fidc.nome
     return resp
+
+
+# ── DELETE /operacoes/{id} ────────────────────────────────────
+
+
+@router.delete("/{op_id}", status_code=status.HTTP_200_OK)
+async def excluir_operacao(
+    op_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Exclui operacao e todos os dados relacionados (boletos, XMLs, envios, audit logs)."""
+    op = await _get_operacao(op_id, db)
+
+    numero = op.numero
+
+    # Deletar registros filhos (sem CASCADE no banco)
+    await db.execute(delete(AuditLog).where(AuditLog.operacao_id == op.id))
+    await db.execute(delete(Envio).where(Envio.operacao_id == op.id))
+    await db.execute(delete(Boleto).where(Boleto.operacao_id == op.id))
+    await db.execute(delete(XmlNfe).where(XmlNfe.operacao_id == op.id))
+    await db.delete(op)
+
+    # Remover pasta de arquivos
+    upload_dir = _storage_path() / "uploads" / str(op.id)
+    if upload_dir.exists():
+        shutil.rmtree(upload_dir, ignore_errors=True)
+
+    await db.commit()
+
+    return {"detail": f"Operacao {numero} excluida com sucesso"}
 
 
 # ── POST /operacoes/{id}/enviar ──────────────────────────────

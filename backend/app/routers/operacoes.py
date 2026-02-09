@@ -127,12 +127,22 @@ async def create_operacao(
 ):
     fidc = await _get_fidc(body.fidc_id, db)
 
-    # Gera número automático se não fornecido
+    # Gera número automático sequencial se não fornecido
     numero = body.numero
     if not numero:
-        count_result = await db.execute(select(func.count()).select_from(Operacao))
-        count = count_result.scalar() or 0
-        numero = f"OP-{count + 1:04d}"
+        max_result = await db.execute(
+            select(func.max(Operacao.numero))
+            .where(Operacao.numero.like("OP-%"))
+        )
+        max_numero = max_result.scalar()
+        if max_numero:
+            try:
+                seq = int(max_numero.replace("OP-", "")) + 1
+            except ValueError:
+                seq = 1
+        else:
+            seq = 1
+        numero = f"OP-{seq:04d}"
 
     op = Operacao(
         numero=numero,

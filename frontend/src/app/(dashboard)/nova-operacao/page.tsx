@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -97,8 +97,44 @@ export default function NovaOperacaoPage() {
   const [selectedFidc, setSelectedFidc] = useState("");
   const [numero, setNumero] = useState("");
   const [operacaoId, setOperacaoId] = useState<string | null>(null);
+  const [operacaoNumero, setOperacaoNumero] = useState<string | null>(null);
   const [step, setStep] = useState<Step>("config");
   const [addingToExisting, setAddingToExisting] = useState(false);
+
+  // Typewriter animation for title
+  const titleTarget = addingToExisting
+    ? "Adicionar Arquivos"
+    : operacaoNumero ?? "Nova Operação";
+  const [displayTitle, setDisplayTitle] = useState(titleTarget);
+  const prevTarget = useRef(titleTarget);
+
+  useEffect(() => {
+    if (titleTarget === prevTarget.current) return;
+    const oldText = prevTarget.current;
+    prevTarget.current = titleTarget;
+
+    let cancelled = false;
+    const ERASE_MS = 30;
+    const TYPE_MS = 50;
+
+    async function animate() {
+      // Erase old text letter by letter
+      for (let i = oldText.length; i >= 0; i--) {
+        if (cancelled) return;
+        setDisplayTitle(oldText.slice(0, i));
+        await new Promise((r) => setTimeout(r, ERASE_MS));
+      }
+      // Type new text letter by letter
+      for (let i = 0; i <= titleTarget.length; i++) {
+        if (cancelled) return;
+        setDisplayTitle(titleTarget.slice(0, i));
+        await new Promise((r) => setTimeout(r, TYPE_MS));
+      }
+    }
+
+    animate();
+    return () => { cancelled = true; };
+  }, [titleTarget]);
 
   // Upload state
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
@@ -136,7 +172,7 @@ export default function NovaOperacaoPage() {
     }
 
     try {
-      const op = await apiFetch<{ id: string }>("/operacoes", {
+      const op = await apiFetch<{ id: string; numero: string }>("/operacoes", {
         method: "POST",
         body: JSON.stringify({
           fidc_id: selectedFidc,
@@ -144,6 +180,7 @@ export default function NovaOperacaoPage() {
         }),
       });
       setOperacaoId(op.id);
+      setOperacaoNumero(op.numero);
       setStep("upload");
       toast.success("Operação criada");
     } catch {
@@ -246,7 +283,8 @@ export default function NovaOperacaoPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">
-          {addingToExisting ? "Adicionar Arquivos" : "Nova Operação"}
+          {displayTitle}
+          <span className="animate-pulse text-primary">|</span>
         </h1>
         <p className="text-muted-foreground">
           {addingToExisting
@@ -308,11 +346,11 @@ export default function NovaOperacaoPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Número da Operação (opcional)</Label>
+              <Label>Número ou referência da operação (opcional)</Label>
               <Input
                 value={numero}
                 onChange={(e) => setNumero(e.target.value)}
-                placeholder="Ex: OP-0001 (gerado automaticamente se vazio)"
+                placeholder="Se vazio, gera automaticamente (OP-0001, OP-0002...)"
               />
             </div>
             <Button onClick={handleCreateOperation} disabled={!selectedFidc}>

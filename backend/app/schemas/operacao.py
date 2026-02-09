@@ -14,6 +14,11 @@ class OperacaoCreate(BaseModel):
     numero: str | None = None
 
 
+class OperacaoUpdate(BaseModel):
+    fidc_id: uuid.UUID | None = None
+    numero: str | None = None
+
+
 # ── Response schemas ──────────────────────────────────────────
 
 

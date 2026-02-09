@@ -11,6 +11,8 @@ import {
   FileText,
   Search,
   Menu,
+  Plus,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,10 +21,14 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  OperationTabsProvider,
+  useOperationTabs,
+} from "@/contexts/operation-tabs";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/nova-operacao", label: "Nova Operação", icon: FilePlus },
+  { href: "/nova-operacao", label: "Criar Operação", icon: FilePlus },
   { href: "/historico", label: "Histórico", icon: FileText },
   { href: "/auditoria", label: "Auditoria", icon: Search },
   { href: "/configuracao/fidcs", label: "Configuração", icon: Settings },
@@ -54,12 +60,98 @@ export default function DashboardLayout({
     router.push("/login");
   }
 
+  function GlobalTabBar() {
+    const { tabs, activeTabId, addTab, removeTab, setActiveTab } =
+      useOperationTabs();
+
+    if (tabs.length === 0) return null;
+
+    function handleTabClick(tabId: string) {
+      setActiveTab(tabId);
+      if (pathname !== "/nova-operacao") {
+        router.push("/nova-operacao");
+      }
+    }
+
+    function handleRemoveTab(tabId: string) {
+      removeTab(tabId);
+    }
+
+    return (
+      <div className="px-4 md:px-8 pt-4 md:pt-6">
+        <div className="flex items-center gap-1 overflow-x-auto pb-3">
+          {tabs.map((tab) => {
+            const isActive = tab.tabId === activeTabId;
+            const label = tab.operacaoNumero || "Nova OP";
+            return (
+              <button
+                key={tab.tabId}
+                type="button"
+                onClick={() => handleTabClick(tab.tabId)}
+                className={`group flex items-center gap-1.5 rounded-t-lg border px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
+                  isActive
+                    ? "border-b-transparent bg-background border-border shadow-sm"
+                    : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                {tab.fidcCor && (
+                  <span
+                    className="h-2 w-2 rounded-full shrink-0"
+                    style={{ backgroundColor: tab.fidcCor || "#999" }}
+                  />
+                )}
+                <span>{label}</span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveTab(tab.tabId);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.stopPropagation();
+                      handleRemoveTab(tab.tabId);
+                    }
+                  }}
+                  className="ml-1 rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-opacity"
+                >
+                  <X className="h-3 w-3" />
+                </span>
+              </button>
+            );
+          })}
+          {tabs.length < 10 && (
+            <button
+              type="button"
+              onClick={() => {
+                addTab();
+                if (pathname !== "/nova-operacao") {
+                  router.push("/nova-operacao");
+                }
+              }}
+              className="flex items-center gap-1 rounded-lg border border-dashed border-muted-foreground/30 px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              title="Nova aba"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <div className="border-b-2 border-primary" />
+      </div>
+    );
+  }
+
   function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
     return (
       <>
         <nav className="flex-1 space-y-1 p-4">
           {NAV_ITEMS.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive =
+              item.href === "/nova-operacao"
+                ? pathname === "/nova-operacao"
+                : pathname === item.href;
+
             return (
               <Link
                 key={item.href}
@@ -97,6 +189,7 @@ export default function DashboardLayout({
   }
 
   return (
+    <OperationTabsProvider>
     <div className="flex min-h-screen">
       {/* Desktop Sidebar — hidden on mobile */}
       <aside className="hidden md:flex w-64 flex-col border-r bg-sidebar">
@@ -134,11 +227,15 @@ export default function DashboardLayout({
           </span>
         </header>
 
+        {/* Tab bar (global — all pages) */}
+        <GlobalTabBar />
+
         {/* Main content */}
         <main className="flex-1 overflow-auto">
           <div className="p-4 md:p-8">{children}</div>
         </main>
       </div>
     </div>
+    </OperationTabsProvider>
   );
 }

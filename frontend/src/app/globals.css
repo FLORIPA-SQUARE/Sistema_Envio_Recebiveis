@@ -101,3 +101,22 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes step-unlock {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) translateX(-12px);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15) translateX(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+}
+
+.animate-step-unlock {
+  animation: step-unlock 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}

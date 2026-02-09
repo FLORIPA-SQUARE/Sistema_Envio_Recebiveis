@@ -3,6 +3,7 @@ Router de Operacoes — CRUD, upload, processamento, reprocessamento, finalizaca
 
 Endpoints:
   POST   /operacoes                      — Criar operacao
+  PATCH  /operacoes/{id}                 — Atualizar operacao (FIDC, numero)
   GET    /operacoes                      — Listar (paginado)
   GET    /operacoes/dashboard/stats      — KPIs agregados
   GET    /operacoes/{id}                 — Detalhes com boletos + XMLs
@@ -60,6 +61,7 @@ from app.schemas.operacao import (
     EnvioStatusUpdate,
     OperacaoCreate,
     OperacaoDetalhada,
+    OperacaoUpdate,
     OperacaoFinalizada,
     OperacaoResponse,
     OperacoesPaginadas,
@@ -265,6 +267,54 @@ async def dashboard_stats(
         total_rejeitados=total_rejeitados,
         taxa_sucesso_global=round(taxa, 2),
         operacoes_recentes=recentes_resp,
+    )
+
+
+# ── PATCH /operacoes/{id} ───────────────────────────────────
+
+
+@router.patch("/{op_id}", response_model=OperacaoResponse)
+async def update_operacao(
+    op_id: str,
+    payload: OperacaoUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Operacao).where(Operacao.id == op_id)
+    )
+    op = result.scalar_one_or_none()
+    if not op:
+        raise HTTPException(status_code=404, detail="Operacao nao encontrada")
+
+    if payload.fidc_id is not None:
+        fidc_result = await db.execute(select(Fidc).where(Fidc.id == payload.fidc_id))
+        fidc = fidc_result.scalar_one_or_none()
+        if not fidc:
+            raise HTTPException(status_code=404, detail="FIDC nao encontrado")
+        op.fidc_id = payload.fidc_id
+
+    if payload.numero is not None:
+        op.numero = payload.numero
+
+    await db.commit()
+    await db.refresh(op)
+
+    fidc_result = await db.execute(select(Fidc).where(Fidc.id == op.fidc_id))
+    fidc = fidc_result.scalar_one_or_none()
+
+    return OperacaoResponse(
+        id=op.id,
+        numero=op.numero,
+        fidc_id=op.fidc_id,
+        fidc_nome=fidc.nome if fidc else None,
+        status=op.status,
+        modo_envio=op.modo_envio,
+        total_boletos=op.total_boletos,
+        total_aprovados=op.total_aprovados,
+        total_rejeitados=op.total_rejeitados,
+        taxa_sucesso=op.taxa_sucesso,
+        created_at=op.created_at,
     )
 
 

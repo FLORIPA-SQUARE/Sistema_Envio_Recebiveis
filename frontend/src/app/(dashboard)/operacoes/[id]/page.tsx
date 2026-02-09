@@ -40,6 +40,7 @@ import {
   CheckCheck,
   Ban,
   Trash2,
+  Upload,
   Download,
   ChevronDown,
   ChevronUp,
@@ -445,6 +446,20 @@ export default function OperacaoDetailPage() {
                 JSON
               </Button>
             </>
+          )}
+          {isEmProcessamento && (
+            <Button
+              variant="outline"
+              onClick={() =>
+                router.push(
+                  `/nova-operacao?operacao_id=${opId}&fidc_id=${operacao.fidc.id}&fidc_nome=${encodeURIComponent(operacao.fidc.nome)}&fidc_cor=${encodeURIComponent(operacao.fidc.cor)}`
+                )
+              }
+              className="gap-2"
+            >
+              <Upload className="h-4 w-4" />
+              Adicionar Arquivos
+            </Button>
           )}
           <Button
             variant="destructive"

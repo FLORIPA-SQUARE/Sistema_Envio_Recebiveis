@@ -18,6 +18,7 @@ Endpoints:
   GET    /operacoes/{id}/relatorio       — Download de relatorio (TXT/JSON)
 """
 
+import logging
 import shutil
 import uuid
 from datetime import datetime, timezone
@@ -75,6 +76,8 @@ from app.services.report_generator import (
     gerar_relatorio_erros_txt,
     gerar_relatorio_json,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/operacoes", tags=["operacoes"])
 
@@ -514,12 +517,34 @@ async def processar_operacao(
     rejeitados = 0
     boletos_processados: list[BoletoCompleto] = []
 
+    # Debug: pasta para salvar texto bruto extraido
+    debug_dir = _operacao_dir(op.id) / "_debug_texto"
+    debug_dir.mkdir(exist_ok=True)
+
     for boleto in boletos:
         # 1. Extrair texto do PDF
         texto = _extrair_texto_pdf(boleto.arquivo_path)
 
+        # DEBUG: salvar texto bruto para analise
+        try:
+            stem = Path(boleto.arquivo_original).stem if boleto.arquivo_original else "unknown"
+            (debug_dir / f"{stem}.txt").write_text(texto, encoding="utf-8")
+        except Exception:
+            pass  # nao falhar por causa do debug
+
         # 2. Extrair dados com o extrator do FIDC
         dados_boleto = extrator.extrair(texto, boleto.arquivo_original)
+
+        # DEBUG: log dos dados extraidos
+        logger.info(
+            "EXTRACAO [%s]: pagador=%s | valor=%s | nf=%s | venc=%s | cnpj=%s",
+            boleto.arquivo_original,
+            dados_boleto.pagador,
+            dados_boleto.valor_formatado,
+            dados_boleto.numero_nota,
+            dados_boleto.vencimento,
+            dados_boleto.cnpj,
+        )
 
         # 3. Encontrar XML correspondente
         nf_key = (dados_boleto.numero_nota or "").lstrip("0")
@@ -653,8 +678,20 @@ async def reprocessar_operacao(
     ainda_rejeitados = 0
     boletos_processados: list[BoletoCompleto] = []
 
+    # Debug: pasta para salvar texto bruto extraido
+    debug_dir = _operacao_dir(op.id) / "_debug_texto"
+    debug_dir.mkdir(exist_ok=True)
+
     for boleto in boletos_rejeitados:
         texto = _extrair_texto_pdf(boleto.arquivo_path)
+
+        # DEBUG: salvar texto bruto para analise
+        try:
+            stem = Path(boleto.arquivo_original).stem if boleto.arquivo_original else "unknown"
+            (debug_dir / f"{stem}.txt").write_text(texto, encoding="utf-8")
+        except Exception:
+            pass
+
         dados_boleto = extrator.extrair(texto, boleto.arquivo_original)
 
         nf_key = (dados_boleto.numero_nota or "").lstrip("0")

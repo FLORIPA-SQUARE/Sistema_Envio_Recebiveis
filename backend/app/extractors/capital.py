@@ -45,12 +45,15 @@ class CapitalExtractor(BaseExtractor):
                     if "CNPJ" not in linha_nome.upper() and "CPF" not in linha_nome.upper() and linha_nome:
                         return self.limpar_nome(linha_nome)
 
-        # Prioridade 2: Boleto tradicional — "PAGADOR"
+        # Prioridade 2: Boleto tradicional — linha que contem APENAS "Pagador"
+        # Ignora "RECIBO DO PAGADOR" (que e cabecalho, nao campo)
         for i, linha in enumerate(linhas):
-            if "PAGADOR" in linha.upper():
+            upper = linha.upper().strip()
+            if "PAGADOR" in upper and "RECIBO" not in upper:
                 if i + 1 < len(linhas):
                     nome = linhas[i + 1].strip()
-                    if nome:
+                    # Ignorar se proxima linha for codigo de barras
+                    if nome and not re.match(r"^\d{3}-\d\s+\d{5}\.\d{5}", nome):
                         return self.limpar_nome(nome)
 
         return None

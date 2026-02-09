@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -93,11 +93,13 @@ type Step = "config" | "upload" | "result";
 
 export default function NovaOperacaoPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [fidcs, setFidcs] = useState<Fidc[]>([]);
   const [selectedFidc, setSelectedFidc] = useState("");
   const [numero, setNumero] = useState("");
   const [operacaoId, setOperacaoId] = useState<string | null>(null);
   const [step, setStep] = useState<Step>("config");
+  const [addingToExisting, setAddingToExisting] = useState(false);
 
   // Upload state
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
@@ -113,6 +115,18 @@ export default function NovaOperacaoPage() {
   useEffect(() => {
     apiFetch<Fidc[]>("/fidcs").then(setFidcs).catch(() => toast.error("Erro ao carregar FIDCs"));
   }, []);
+
+  // Detect query params for "add files to existing operation"
+  useEffect(() => {
+    const opId = searchParams.get("operacao_id");
+    const fidcId = searchParams.get("fidc_id");
+    if (opId && fidcId) {
+      setOperacaoId(opId);
+      setSelectedFidc(fidcId);
+      setStep("upload");
+      setAddingToExisting(true);
+    }
+  }, [searchParams]);
 
   // ── Step 1: Create operation ──────────────────────────────
 
@@ -223,36 +237,47 @@ export default function NovaOperacaoPage() {
   // ── Render ────────────────────────────────────────────────
 
   const selectedFidcObj = fidcs.find((f) => f.id === selectedFidc);
+  const fidcDisplay = selectedFidcObj
+    ? { nome: selectedFidcObj.nome, cor: selectedFidcObj.cor }
+    : addingToExisting
+    ? { nome: searchParams.get("fidc_nome") || "", cor: searchParams.get("fidc_cor") || "#999" }
+    : null;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Nova Operação</h1>
+        <h1 className="text-3xl font-bold">
+          {addingToExisting ? "Adicionar Arquivos" : "Nova Operação"}
+        </h1>
         <p className="text-muted-foreground">
-          Upload de boletos e XMLs para processamento
+          {addingToExisting
+            ? "Adicione mais boletos e notas fiscais a esta operação"
+            : "Upload de boletos e XMLs para processamento"}
         </p>
       </div>
 
       {/* Steps indicator */}
-      <div className="flex items-center gap-2">
-        {["config", "upload", "result"].map((s, i) => (
-          <div key={s} className="flex items-center gap-2">
-            {i > 0 && <Separator className="w-8" />}
-            <div
-              className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
-                step === s
-                  ? "bg-primary text-primary-foreground"
-                  : s === "result" && step !== "result"
-                  ? "bg-muted text-muted-foreground"
-                  : "bg-primary/20 text-primary"
-              }`}
-            >
-              {i + 1}
+      {!addingToExisting && (
+        <div className="flex items-center gap-2">
+          {["config", "upload", "result"].map((s, i) => (
+            <div key={s} className="flex items-center gap-2">
+              {i > 0 && <Separator className="w-8" />}
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                  step === s
+                    ? "bg-primary text-primary-foreground"
+                    : s === "result" && step !== "result"
+                    ? "bg-muted text-muted-foreground"
+                    : "bg-primary/20 text-primary"
+                }`}
+              >
+                {i + 1}
+              </div>
+              <span className="text-sm font-medium capitalize">{s === "config" ? "Configurar" : s === "upload" ? "Upload" : "Resultado"}</span>
             </div>
-            <span className="text-sm font-medium capitalize">{s === "config" ? "Configurar" : s === "upload" ? "Upload" : "Resultado"}</span>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Step 1: Config */}
       {step === "config" && (
@@ -301,13 +326,13 @@ export default function NovaOperacaoPage() {
       {/* Step 2: Upload */}
       {step === "upload" && (
         <div className="space-y-4">
-          {selectedFidcObj && (
+          {fidcDisplay && (
             <div className="flex items-center gap-2">
               <span
                 className="inline-block h-3 w-3 rounded-full"
-                style={{ backgroundColor: selectedFidcObj.cor }}
+                style={{ backgroundColor: fidcDisplay.cor }}
               />
-              <span className="font-medium">{selectedFidcObj.nome}</span>
+              <span className="font-medium">{fidcDisplay.nome}</span>
               <Badge variant="outline">
                 {uploadedBoletos.length} boletos | {uploadedXmls.length} XMLs
               </Badge>
@@ -421,7 +446,7 @@ export default function NovaOperacaoPage() {
               {uploading ? "Enviando..." : "Enviar Arquivos"}
             </Button>
 
-            {uploadedBoletos.length > 0 && (
+            {uploadedBoletos.length > 0 && !addingToExisting && (
               <Button onClick={handleProcess} disabled={processing} className="gap-2">
                 {processing ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -429,6 +454,15 @@ export default function NovaOperacaoPage() {
                   <Play className="h-4 w-4" />
                 )}
                 {processing ? "Processando..." : "Processar Operação"}
+              </Button>
+            )}
+
+            {addingToExisting && (
+              <Button
+                variant="outline"
+                onClick={() => router.push(`/operacoes/${operacaoId}`)}
+              >
+                Voltar para Operação
               </Button>
             )}
           </div>

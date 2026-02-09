@@ -97,26 +97,40 @@ class BaseExtractor(ABC):
     def extrair_valor_documento(texto: str) -> str | None:
         """Extrai valor usando padrão 'Valor do Documento'.
 
-        Pattern 1: (=) Valor Documento
-        Pattern 2: Valor Documento (sem (=))
+        Pattern 1: (=) Valor Documento (valor na mesma linha)
+        Pattern 2: Valor Documento (sem (=), valor na mesma linha)
+        Pattern 3: "R$ VALOR" na linha seguinte a "Valor Documento"
         """
-        # Pattern 1: com (=)
-        match = re.search(
-            r"\(=\)\s*Valor\s+(?:do\s+)?Documento\s*[:\s]*(?:R\$\s*)?([\d.,]+)",
-            texto,
-            re.IGNORECASE | re.MULTILINE,
-        )
-        if match:
-            return match.group(1)
+        linhas = texto.split("\n")
 
-        # Pattern 2: sem (=)
-        match = re.search(
-            r"Valor\s+(?:do\s+)?Documento\s*[:\s]*(?:R\$\s*)?([\d.,]+)",
-            texto,
-            re.IGNORECASE | re.MULTILINE,
-        )
-        if match:
-            return match.group(1)
+        # Primeiro: buscar por linha que contenha "Valor Documento" com valor na mesma linha
+        for linha in linhas:
+            # Pattern com (=)
+            match = re.search(
+                r"\(=\)\s*Valor\s+(?:do\s+)?(?:Documento|Cobrado)\s*[:\s]*(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})",
+                linha,
+                re.IGNORECASE,
+            )
+            if match:
+                return match.group(1)
+
+            # Pattern sem (=) — valor monetario na mesma linha (com virgula decimal)
+            match = re.search(
+                r"Valor\s+(?:do\s+)?Documento\s*[:\s]*R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2})",
+                linha,
+                re.IGNORECASE,
+            )
+            if match:
+                return match.group(1)
+
+        # Fallback: "Valor Documento" como cabecalho, valor R$ na proxima linha
+        for i, linha in enumerate(linhas):
+            if re.search(r"Valor\s+(?:do\s+)?Documento", linha, re.IGNORECASE):
+                if i + 1 < len(linhas):
+                    next_line = linhas[i + 1].strip()
+                    match = re.search(r"(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})", next_line)
+                    if match:
+                        return match.group(1)
 
         return None
 

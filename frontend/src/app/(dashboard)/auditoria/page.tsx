@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { useOperationTabs } from "@/contexts/operation-tabs";
 import {
   Card,
   CardContent,
@@ -99,6 +100,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function AuditoriaPage() {
   const router = useRouter();
+  const { openOperation } = useOperationTabs();
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebounce(searchTerm, 400);
 
@@ -387,9 +389,17 @@ export default function AuditoriaPage() {
                     <TableRow
                       key={item.boleto_id}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() =>
-                        router.push(`/operacoes/${item.operacao_id}`)
-                      }
+                      onClick={() => {
+                        const fidc = fidcs.find((f) => f.id === item.fidc_id);
+                        openOperation({
+                          operacaoId: item.operacao_id,
+                          operacaoNumero: item.operacao_numero,
+                          fidcId: item.fidc_id,
+                          fidcNome: item.fidc_nome || fidc?.nome || "",
+                          fidcCor: fidc?.cor || "",
+                        });
+                        router.push("/nova-operacao");
+                      }}
                     >
                       <TableCell className="font-medium whitespace-nowrap">
                         {item.operacao_numero}

@@ -18,6 +18,14 @@ export interface OperationTab {
   fidcCor: string;
 }
 
+interface OpenOperationParams {
+  operacaoId: string;
+  operacaoNumero: string;
+  fidcId?: string;
+  fidcNome?: string;
+  fidcCor?: string;
+}
+
 interface OperationTabsContextType {
   tabs: OperationTab[];
   activeTabId: string | null;
@@ -25,6 +33,7 @@ interface OperationTabsContextType {
   removeTab: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
   updateTab: (tabId: string, updates: Partial<OperationTab>) => void;
+  openOperation: (params: OpenOperationParams) => string | null;
 }
 
 const MAX_TABS = 10;
@@ -94,9 +103,35 @@ export function OperationTabsProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const openOperation = useCallback(
+    (params: OpenOperationParams) => {
+      // If already open, just activate that tab
+      const existing = tabs.find((t) => t.operacaoId === params.operacaoId);
+      if (existing) {
+        setActiveTabId(existing.tabId);
+        return existing.tabId;
+      }
+      if (tabs.length >= MAX_TABS) return null;
+      const tabId = generateId();
+      const newTab: OperationTab = {
+        tabId,
+        operacaoId: params.operacaoId,
+        operacaoNumero: params.operacaoNumero,
+        step: "resumo",
+        fidcId: params.fidcId || "",
+        fidcNome: params.fidcNome || "",
+        fidcCor: params.fidcCor || "",
+      };
+      setTabs((prev) => [...prev, newTab]);
+      setActiveTabId(tabId);
+      return tabId;
+    },
+    [tabs],
+  );
+
   return (
     <OperationTabsContext.Provider
-      value={{ tabs, activeTabId, addTab, removeTab, setActiveTab, updateTab }}
+      value={{ tabs, activeTabId, addTab, removeTab, setActiveTab, updateTab, openOperation }}
     >
       {children}
     </OperationTabsContext.Provider>

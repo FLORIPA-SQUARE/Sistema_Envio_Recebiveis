@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { useOperationTabs } from "@/contexts/operation-tabs";
 import {
   Card,
   CardContent,
@@ -89,6 +90,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function HistoricoPage() {
   const router = useRouter();
+  const { openOperation } = useOperationTabs();
   const [operacoes, setOperacoes] = useState<Operacao[]>([]);
   const [fidcs, setFidcs] = useState<Fidc[]>([]);
   const [total, setTotal] = useState(0);
@@ -125,6 +127,18 @@ export default function HistoricoPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleOpenOperation(op: Operacao) {
+    const fidc = fidcs.find((f) => f.id === op.fidc_id);
+    openOperation({
+      operacaoId: op.id,
+      operacaoNumero: op.numero,
+      fidcId: op.fidc_id,
+      fidcNome: op.fidc_nome || fidc?.nome || "",
+      fidcCor: fidc?.cor || "",
+    });
+    router.push("/nova-operacao");
   }
 
   function formatDate(dateStr: string) {
@@ -228,7 +242,7 @@ export default function HistoricoPage() {
                     <TableRow
                       key={op.id}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => router.push(`/operacoes/${op.id}`)}
+                      onClick={() => handleOpenOperation(op)}
                     >
                       <TableCell className="font-medium font-[family-name:var(--font-barlow-condensed)]">
                         {op.numero}
@@ -258,7 +272,7 @@ export default function HistoricoPage() {
                           size="icon"
                           onClick={(e) => {
                             e.stopPropagation();
-                            router.push(`/operacoes/${op.id}`);
+                            handleOpenOperation(op);
                           }}
                         >
                           <Eye className="h-4 w-4" />

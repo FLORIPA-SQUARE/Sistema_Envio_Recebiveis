@@ -59,6 +59,7 @@ import {
   Ban,
   CheckCheck,
   Download,
+  Trash2,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { FileDropzone } from "@/components/file-dropzone";
@@ -135,6 +136,7 @@ interface OperacaoDetalhada {
   taxa_sucesso: number;
   boletos: BoletoCompleto[];
   xmls: XmlResumo[];
+  created_at: string;
 }
 
 interface EnvioDetalhe {
@@ -201,7 +203,7 @@ export default function NovaOperacaoPage() {
 function OperationEditor({ tabId }: { tabId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { updateTab, tabs } = useOperationTabs();
+  const { updateTab, removeTab, tabs } = useOperationTabs();
   const tab = tabs.find((t) => t.tabId === tabId)!;
 
   const [fidcs, setFidcs] = useState<Fidc[]>([]);
@@ -284,6 +286,8 @@ function OperationEditor({ tabId }: { tabId: string }) {
   const [confirmEnvioAuto, setConfirmEnvioAuto] = useState(false);
   const [expandedBoleto, setExpandedBoleto] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [operacaoCreatedAt, setOperacaoCreatedAt] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<"finalizar" | "cancelar" | "excluir" | null>(null);
 
   // Load FIDCs
   useEffect(() => {
@@ -315,6 +319,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
         setSelectedFidc(op.fidc.id);
         setSavedFidc(op.fidc.id);
         setSavedNumero(op.numero);
+        setOperacaoCreatedAt(op.created_at);
 
         if (tab.step === "resumo" || tab.step === "envio" || tab.step === "result" || op.status === "em_processamento" || op.status === "concluida") {
           // Restore resultado from operation data
@@ -378,6 +383,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
       setSavedFidc(selectedFidc);
       setSavedNumero(op.numero);
       setNumero(op.numero);
+      setOperacaoCreatedAt(new Date().toISOString());
       setStep("upload");
       syncTab({
         operacaoId: op.id,
@@ -608,10 +614,10 @@ function OperationEditor({ tabId }: { tabId: string }) {
   async function handleFinalizar() {
     if (!operacaoId) return;
     setActionLoading(true);
+    setConfirmDialog(null);
     try {
       await apiFetch(`/operacoes/${operacaoId}/finalizar`, { method: "POST" });
       toast.success("Operação finalizada");
-      // Refresh resultado
       const op = await apiFetch<OperacaoDetalhada>(`/operacoes/${operacaoId}`);
       setResultado({
         total: op.total_boletos,
@@ -631,12 +637,30 @@ function OperationEditor({ tabId }: { tabId: string }) {
   async function handleCancelar() {
     if (!operacaoId) return;
     setActionLoading(true);
+    setConfirmDialog(null);
     try {
       await apiFetch(`/operacoes/${operacaoId}/cancelar`, { method: "POST" });
       toast.success("Operação cancelada");
+      removeTab(tabId);
       router.push("/historico");
     } catch {
       toast.error("Erro ao cancelar");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleExcluir() {
+    if (!operacaoId) return;
+    setActionLoading(true);
+    setConfirmDialog(null);
+    try {
+      await apiFetch(`/operacoes/${operacaoId}`, { method: "DELETE" });
+      toast.success("Operação excluída");
+      removeTab(tabId);
+      router.push("/historico");
+    } catch {
+      toast.error("Erro ao excluir");
     } finally {
       setActionLoading(false);
     }
@@ -1011,7 +1035,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
           <div className="flex gap-3">
             <Button onClick={handleUpload} disabled={uploading || pdfFiles.length === 0}>
               {uploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {uploading ? "Enviando..." : "Enviar Arquivos"}
+              {uploading ? "Salvando..." : "Salvar Upload"}
             </Button>
 
             {uploadedBoletos.length > 0 && !addingToExisting && (
@@ -1028,9 +1052,9 @@ function OperationEditor({ tabId }: { tabId: string }) {
             {addingToExisting && (
               <Button
                 variant="outline"
-                onClick={() => router.push(`/operacoes/${operacaoId}`)}
+                onClick={() => { setStep("resumo"); syncTab({ step: "resumo" }); }}
               >
-                Voltar para Operação
+                Ver Resultado
               </Button>
             )}
           </div>
@@ -1040,47 +1064,6 @@ function OperationEditor({ tabId }: { tabId: string }) {
       {/* Step 3: Result */}
       {step === "result" && resultado && (
         <div className="space-y-4">
-          {/* Summary cards */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-sm text-muted-foreground">Total</div>
-                <div className="text-3xl font-bold font-[family-name:var(--font-barlow-condensed)]">
-                  {resultado.total}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-1 text-sm text-success">
-                  <CheckCircle2 className="h-4 w-4" /> Aprovados
-                </div>
-                <div className="text-3xl font-bold font-[family-name:var(--font-barlow-condensed)] text-success">
-                  {resultado.aprovados}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-1 text-sm text-destructive">
-                  <XCircle className="h-4 w-4" /> Rejeitados
-                </div>
-                <div className="text-3xl font-bold font-[family-name:var(--font-barlow-condensed)] text-destructive">
-                  {resultado.rejeitados}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-sm text-muted-foreground">Taxa de Sucesso</div>
-                <div className="text-3xl font-bold font-[family-name:var(--font-barlow-condensed)]">
-                  {resultado.taxa_sucesso.toFixed(1)}%
-                </div>
-                <Progress value={resultado.taxa_sucesso} className="mt-2" />
-              </CardContent>
-            </Card>
-          </div>
-
           {/* Boletos table */}
           <Card>
             <CardHeader>
@@ -1145,14 +1128,6 @@ function OperationEditor({ tabId }: { tabId: string }) {
               <Button onClick={() => { setStep("envio"); syncTab({ step: "envio" }); fetchEnvios(); }}>
                 <Send className="mr-2 h-4 w-4" />
                 Ir para Envio
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => router.push("/")}>
-              Voltar ao Dashboard
-            </Button>
-            {operacaoId && (
-              <Button variant="outline" onClick={() => router.push(`/operacoes/${operacaoId}`)}>
-                Ver Detalhes da Operação
               </Button>
             )}
           </div>
@@ -1541,8 +1516,14 @@ function OperationEditor({ tabId }: { tabId: string }) {
       {/* Step 5: Resumo */}
       {step === "resumo" && operacaoId && resultado && (
         <div className="space-y-6">
-          {/* Action buttons */}
-          <div className="flex flex-wrap gap-2 justify-end">
+          {/* Action bar: date + buttons */}
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-muted-foreground">
+              {operacaoCreatedAt && (
+                <span>Criada em {formatDate(operacaoCreatedAt)}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
               {resultado.rejeitados > 0 && (
                 <Button
                   variant="outline"
@@ -1555,22 +1536,34 @@ function OperationEditor({ tabId }: { tabId: string }) {
                 </Button>
               )}
               <Button
-                onClick={handleFinalizar}
+                size="icon"
+                onClick={() => setConfirmDialog("finalizar")}
                 disabled={actionLoading}
-                className="gap-2"
+                title="Finalizar — Marca a operação como concluída e gera relatórios"
               >
                 <CheckCheck className="h-4 w-4" />
-                Finalizar
               </Button>
               <Button
-                variant="destructive"
-                onClick={handleCancelar}
+                size="icon"
+                variant="outline"
+                onClick={() => setConfirmDialog("cancelar")}
                 disabled={actionLoading}
-                className="gap-2"
+                className="border-warning text-warning hover:bg-warning/10 hover:text-warning"
+                title="Cancelar — Marca a operação como cancelada (irreversível)"
               >
                 <Ban className="h-4 w-4" />
-                Cancelar
               </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => setConfirmDialog("excluir")}
+                disabled={actionLoading}
+                className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
+                title="Excluir — Remove permanentemente a operação e todos os dados"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           {/* KPI Cards */}
@@ -1913,6 +1906,54 @@ function OperationEditor({ tabId }: { tabId: string }) {
               <CheckCircle2 className="h-4 w-4" />
               Confirmar
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmDialog === "finalizar"} onOpenChange={() => setConfirmDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Finalizar Operação</DialogTitle>
+            <DialogDescription>
+              Ao finalizar, a operação será marcada como concluída e os relatórios serão gerados.
+              Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setConfirmDialog(null)}>Voltar</Button>
+            <Button onClick={handleFinalizar} disabled={actionLoading}>Confirmar Finalização</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmDialog === "cancelar"} onOpenChange={() => setConfirmDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancelar Operação</DialogTitle>
+            <DialogDescription>
+              Ao cancelar, a operação será marcada como cancelada e não poderá mais ser editada.
+              Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setConfirmDialog(null)}>Voltar</Button>
+            <Button className="bg-warning text-warning-foreground hover:bg-warning/90" onClick={handleCancelar} disabled={actionLoading}>Confirmar Cancelamento</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmDialog === "excluir"} onOpenChange={() => setConfirmDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir Operação</DialogTitle>
+            <DialogDescription>
+              Esta ação vai excluir permanentemente a operação {operacaoNumero} e todos os dados
+              relacionados (boletos, XMLs, envios, logs). Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setConfirmDialog(null)}>Voltar</Button>
+            <Button variant="destructive" onClick={handleExcluir} disabled={actionLoading}>Excluir Permanentemente</Button>
           </div>
         </DialogContent>
       </Dialog>

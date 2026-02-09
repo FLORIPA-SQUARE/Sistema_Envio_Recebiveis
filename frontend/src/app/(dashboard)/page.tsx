@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
+import { useOperationTabs } from "@/contexts/operation-tabs";
 import {
   Card,
   CardContent,
@@ -76,6 +77,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { openOperation } = useOperationTabs();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -85,6 +87,16 @@ export default function DashboardPage() {
       .catch(() => toast.error("Erro ao carregar dashboard"))
       .finally(() => setLoading(false));
   }, []);
+
+  function handleOpenOperation(op: Operacao) {
+    openOperation({
+      operacaoId: op.id,
+      operacaoNumero: op.numero,
+      fidcId: op.fidc_id,
+      fidcNome: op.fidc_nome || "",
+    });
+    router.push("/nova-operacao");
+  }
 
   function formatDate(dateStr: string) {
     return new Date(dateStr).toLocaleDateString("pt-BR", {
@@ -192,7 +204,7 @@ export default function DashboardPage() {
                     <TableRow
                       key={op.id}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => router.push(`/operacoes/${op.id}`)}
+                      onClick={() => handleOpenOperation(op)}
                     >
                       <TableCell className="font-medium font-[family-name:var(--font-barlow-condensed)]">
                         {op.numero}
@@ -216,7 +228,7 @@ export default function DashboardPage() {
                           size="icon"
                           onClick={(e) => {
                             e.stopPropagation();
-                            router.push(`/operacoes/${op.id}`);
+                            handleOpenOperation(op);
                           }}
                         >
                           <Eye className="h-4 w-4" />

@@ -48,8 +48,8 @@ echo [4/5] Executando seed (FIDCs + usuario padrao)...
 python -m app.seed
 
 :: 5. Start Backend (new window)
-echo [5/6] Iniciando Backend...
-start "Backend FastAPI" cmd /k "cd /d %~dp0backend && call venv\Scripts\activate.bat && uvicorn main:app --reload --port 8000"
+echo [5/6] Iniciando Backend (porta 5556)...
+start "Backend FastAPI" cmd /k "cd /d %~dp0backend && call venv\Scripts\activate.bat && uvicorn main:app --reload --host 0.0.0.0 --port 5556"
 
 :: 6. Health check — wait for backend to be ready
 echo [6/6] Aguardando Backend ficar pronto...
@@ -59,7 +59,7 @@ if %RETRIES% geq 30 (
     echo AVISO: Timeout aguardando backend. Iniciando frontend mesmo assim...
     goto start_frontend
 )
-powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8000/api/health' -UseBasicParsing -TimeoutSec 2; if ($r.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
+powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:5556/api/health' -UseBasicParsing -TimeoutSec 2; if ($r.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     echo        Backend pronto!
     goto start_frontend
@@ -73,13 +73,25 @@ goto wait_backend
 cd /d %~dp0frontend
 start "Frontend Next.js" cmd /k "cd /d %~dp0frontend && npm run dev"
 
+:: 8. Detect real LAN IP (skip virtual adapters like Docker/WSL)
 cd /d %~dp0
+set LOCAL_IP=
+for /f "usebackq tokens=*" %%L in (`powershell -NoProfile -Command "(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch 'vEthernet|Loopback|WSL|Docker|Hyper-V' -and ($_.IPAddress -like '192.168.*' -or $_.IPAddress -like '10.*') } | Select-Object -First 1).IPAddress"`) do (
+    set LOCAL_IP=%%L
+)
+if "%LOCAL_IP%"=="" set LOCAL_IP=127.0.0.1
+
 echo.
 echo ============================================
 echo   Sistema iniciado com sucesso!
-echo   Backend:  http://localhost:8000
-echo   Frontend: http://localhost:3000
-echo   API Docs: http://localhost:8000/api/docs
+echo.
+echo   Acesso local:
+echo     Frontend: http://localhost:5555
+echo     Backend:  http://localhost:5556
+echo.
+echo   Acesso pela rede:
+echo     Frontend: http://%LOCAL_IP%:5555
+echo     Backend:  http://%LOCAL_IP%:5556
 echo ============================================
 echo.
 echo Pressione qualquer tecla para fechar esta janela...

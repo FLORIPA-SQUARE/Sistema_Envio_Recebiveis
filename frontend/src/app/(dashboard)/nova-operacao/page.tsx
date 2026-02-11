@@ -62,6 +62,8 @@ import {
   Trash2,
   Pencil,
   Plus,
+  ChevronRight,
+  Maximize2,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { FileDropzone } from "@/components/file-dropzone";
@@ -289,6 +291,12 @@ function OperationEditor({ tabId }: { tabId: string }) {
   const [editEmailsList, setEditEmailsList] = useState<string[]>([]);
   const [editEmailInput, setEditEmailInput] = useState("");
   const [savingEmails, setSavingEmails] = useState(false);
+
+  // Document preview state
+  const [expandedUploadBoleto, setExpandedUploadBoleto] = useState<string | null>(null);
+  const [expandedUploadXml, setExpandedUploadXml] = useState<string | null>(null);
+  const [previewModal, setPreviewModal] = useState<{ url: string; title: string } | null>(null);
+  const [previewBlobUrls, setPreviewBlobUrls] = useState<Record<string, string>>({});
 
   // Load FIDCs
   useEffect(() => {
@@ -542,6 +550,28 @@ function OperationEditor({ tabId }: { tabId: string }) {
       toast.error("Erro ao processar operação");
     } finally {
       setProcessing(false);
+    }
+  }
+
+  // -- Document preview --
+
+  async function loadPreview(path: string, key: string) {
+    if (previewBlobUrls[key]) return;
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`/api/v1${path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        toast.error(`Erro ao carregar preview: ${res.status}`);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      setPreviewBlobUrls((prev) => ({ ...prev, [key]: url }));
+    } catch (err) {
+      toast.error("Erro ao carregar preview do documento");
+      console.error("loadPreview error:", err);
     }
   }
 
@@ -1022,6 +1052,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-8 px-2" />
                       <TableHead>NF</TableHead>
                       <TableHead>Destinatário</TableHead>
                       <TableHead>CNPJ</TableHead>
@@ -1032,112 +1063,159 @@ function OperationEditor({ tabId }: { tabId: string }) {
                   </TableHeader>
                   <TableBody>
                     {uploadedXmls.map((xml) => (
-                      <TableRow key={xml.id}>
-                        <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
-                          {xml.numero_nota}
-                        </TableCell>
-                        <TableCell>{xml.nome_destinatario || "—"}</TableCell>
-                        <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
-                          {xml.cnpj || "—"}
-                        </TableCell>
-                        <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
-                          {xml.valor_total
-                            ? `R$ ${xml.valor_total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
-                            : "—"}
-                        </TableCell>
-                        <TableCell>
-                          {editingXmlId === xml.id ? (
-                            <div className="space-y-2 min-w-[220px]">
-                              <div className="flex flex-wrap gap-1">
-                                {editEmailsList.map((email) => (
-                                  <span
-                                    key={email}
-                                    className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs"
-                                  >
-                                    {email}
-                                    <button
-                                      type="button"
-                                      onClick={() => removeEmailFromList(email)}
-                                      className="text-muted-foreground hover:text-destructive"
+                      <Fragment key={xml.id}>
+                        <TableRow
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => {
+                            const isExpanding = expandedUploadXml !== xml.id;
+                            setExpandedUploadXml(isExpanding ? xml.id : null);
+                            if (isExpanding && operacaoId) {
+                              loadPreview(`/operacoes/${operacaoId}/xmls/${xml.id}/arquivo`, `xml-${xml.id}`);
+                            }
+                          }}
+                        >
+                          <TableCell className="w-8 px-2">
+                            {expandedUploadXml === xml.id
+                              ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                          </TableCell>
+                          <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
+                            {xml.numero_nota}
+                          </TableCell>
+                          <TableCell>{xml.nome_destinatario || "—"}</TableCell>
+                          <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
+                            {xml.cnpj || "—"}
+                          </TableCell>
+                          <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
+                            {xml.valor_total
+                              ? `R$ ${xml.valor_total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                              : "—"}
+                          </TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            {editingXmlId === xml.id ? (
+                              <div className="space-y-2 min-w-[220px]">
+                                <div className="flex flex-wrap gap-1">
+                                  {editEmailsList.map((email) => (
+                                    <span
+                                      key={email}
+                                      className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs"
                                     >
-                                      <XCircle className="h-3 w-3" />
-                                    </button>
-                                  </span>
-                                ))}
+                                      {email}
+                                      <button
+                                        type="button"
+                                        onClick={() => removeEmailFromList(email)}
+                                        className="text-muted-foreground hover:text-destructive"
+                                      >
+                                        <XCircle className="h-3 w-3" />
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                                <div className="flex gap-1">
+                                  <Input
+                                    value={editEmailInput}
+                                    onChange={(e) => setEditEmailInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") { e.preventDefault(); addEmailToList(); }
+                                    }}
+                                    placeholder="novo@email.com"
+                                    className="h-7 text-xs"
+                                  />
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-7 w-7 shrink-0"
+                                    onClick={addEmailToList}
+                                    disabled={!editEmailInput.trim()}
+                                  >
+                                    <Plus className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                                <div className="flex gap-1">
+                                  <Button
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    onClick={handleSaveEmails}
+                                    disabled={savingEmails}
+                                  >
+                                    {savingEmails ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                                    Salvar
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 text-xs"
+                                    onClick={() => setEditingXmlId(null)}
+                                  >
+                                    Cancelar
+                                  </Button>
+                                </div>
                               </div>
-                              <div className="flex gap-1">
-                                <Input
-                                  value={editEmailInput}
-                                  onChange={(e) => setEditEmailInput(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") { e.preventDefault(); addEmailToList(); }
-                                  }}
-                                  placeholder="novo@email.com"
-                                  className="h-7 text-xs"
-                                />
+                            ) : (
+                              <div className="flex items-center gap-1.5">
+                                <div className="flex flex-col gap-0.5">
+                                  {xml.emails.map((e) => (
+                                    <span key={e} className="text-xs">{e}</span>
+                                  ))}
+                                  {xml.emails_invalidos.map((e) => (
+                                    <span key={e} className="text-xs text-destructive line-through">{e}</span>
+                                  ))}
+                                  {xml.emails.length === 0 && xml.emails_invalidos.length === 0 && (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  )}
+                                </div>
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  className="h-7 w-7 shrink-0"
-                                  onClick={addEmailToList}
-                                  disabled={!editEmailInput.trim()}
+                                  className="h-6 w-6 shrink-0"
+                                  onClick={(e) => { e.stopPropagation(); startEditEmails(xml); }}
+                                  title="Editar emails"
                                 >
-                                  <Plus className="h-3.5 w-3.5" />
+                                  <Pencil className="h-3 w-3" />
                                 </Button>
                               </div>
-                              <div className="flex gap-1">
-                                <Button
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                  onClick={handleSaveEmails}
-                                  disabled={savingEmails}
-                                >
-                                  {savingEmails ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                                  Salvar
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 text-xs"
-                                  onClick={() => setEditingXmlId(null)}
-                                >
-                                  Cancelar
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5">
-                              <div className="flex flex-col gap-0.5">
-                                {xml.emails.map((e) => (
-                                  <span key={e} className="text-xs">{e}</span>
-                                ))}
-                                {xml.emails_invalidos.map((e) => (
-                                  <span key={e} className="text-xs text-destructive line-through">{e}</span>
-                                ))}
-                                {xml.emails.length === 0 && xml.emails_invalidos.length === 0 && (
-                                  <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {xml.xml_valido ? (
+                              <Badge className="bg-success text-success-foreground">Válido</Badge>
+                            ) : (
+                              <Badge variant="destructive">Inválido</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                        {expandedUploadXml === xml.id && (
+                          <TableRow>
+                            <TableCell colSpan={7} className="p-0">
+                              <div className="bg-muted/30 p-4">
+                                {previewBlobUrls[`xml-${xml.id}`] ? (
+                                  <div className="space-y-2">
+                                    <iframe
+                                      src={previewBlobUrls[`xml-${xml.id}`]}
+                                      className="w-full h-64 rounded border bg-white"
+                                      title={xml.nome_arquivo}
+                                    />
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="gap-2"
+                                      onClick={() => setPreviewModal({ url: previewBlobUrls[`xml-${xml.id}`], title: xml.nome_arquivo })}
+                                    >
+                                      <Maximize2 className="h-3.5 w-3.5" />
+                                      Ampliar
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-center h-32 text-muted-foreground">
+                                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                    Carregando preview...
+                                  </div>
                                 )}
                               </div>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-6 w-6 shrink-0"
-                                onClick={() => startEditEmails(xml)}
-                                title="Editar emails"
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {xml.xml_valido ? (
-                            <Badge className="bg-success text-success-foreground">Válido</Badge>
-                          ) : (
-                            <Badge variant="destructive">Inválido</Badge>
-                          )}
-                        </TableCell>
-                      </TableRow>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </Fragment>
                     ))}
                   </TableBody>
                 </Table>
@@ -1161,6 +1239,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-8 px-2" />
                         <TableHead>Arquivo</TableHead>
                         <TableHead>Pagador</TableHead>
                         <TableHead>NF</TableHead>
@@ -1175,27 +1254,80 @@ function OperationEditor({ tabId }: { tabId: string }) {
                         const nfKey = (boleto.numero_nota || "").replace(/^0+/, "") || "0";
                         const xml = xmlByNota.get(nfKey);
                         return (
-                          <TableRow key={boleto.id}>
-                            <TableCell className="max-w-[200px] truncate text-sm" title={boleto.arquivo_renomeado || boleto.arquivo_original}>
-                              {boleto.arquivo_renomeado || boleto.arquivo_original}
-                            </TableCell>
-                            <TableCell className="max-w-[180px] truncate">{boleto.pagador || "—"}</TableCell>
-                            <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
-                              {boleto.numero_nota || "—"}
-                            </TableCell>
-                            <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
-                              {boleto.vencimento || "—"}
-                            </TableCell>
-                            <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
-                              {boleto.valor_formatado || "—"}
-                            </TableCell>
-                            <TableCell className="max-w-[180px] truncate">
-                              {xml?.nome_destinatario || "—"}
-                            </TableCell>
-                            <TableCell className="max-w-[200px] truncate text-sm">
-                              {xml && xml.emails.length > 0 ? xml.emails.join(", ") : "—"}
-                            </TableCell>
-                          </TableRow>
+                          <Fragment key={boleto.id}>
+                            <TableRow
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => {
+                                const isExpanding = expandedUploadBoleto !== boleto.id;
+                                setExpandedUploadBoleto(isExpanding ? boleto.id : null);
+                                if (isExpanding && operacaoId) {
+                                  loadPreview(`/operacoes/${operacaoId}/boletos/${boleto.id}/arquivo`, `boleto-${boleto.id}`);
+                                }
+                              }}
+                            >
+                              <TableCell className="w-8 px-2">
+                                {expandedUploadBoleto === boleto.id
+                                  ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                  : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                              </TableCell>
+                              <TableCell className="max-w-[200px] truncate text-sm" title={boleto.arquivo_renomeado || boleto.arquivo_original}>
+                                {boleto.arquivo_renomeado || boleto.arquivo_original}
+                              </TableCell>
+                              <TableCell className="max-w-[180px] truncate">{boleto.pagador || "—"}</TableCell>
+                              <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
+                                {boleto.numero_nota || "—"}
+                              </TableCell>
+                              <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
+                                {boleto.vencimento || "—"}
+                              </TableCell>
+                              <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
+                                {boleto.valor_formatado || "—"}
+                              </TableCell>
+                              <TableCell className="max-w-[180px] truncate">
+                                {xml?.nome_destinatario || "—"}
+                              </TableCell>
+                              <TableCell className="max-w-[200px] truncate text-sm">
+                                {xml && xml.emails.length > 0 ? xml.emails.join(", ") : "—"}
+                              </TableCell>
+                            </TableRow>
+                            {expandedUploadBoleto === boleto.id && (
+                              <TableRow>
+                                <TableCell colSpan={8} className="p-0">
+                                  <div className="bg-muted/30 p-4">
+                                    {previewBlobUrls[`boleto-${boleto.id}`] ? (
+                                      <div className="space-y-2">
+                                        <iframe
+                                          src={previewBlobUrls[`boleto-${boleto.id}`]}
+                                          className="w-full h-64 rounded border bg-white"
+                                          title={boleto.arquivo_renomeado || boleto.arquivo_original}
+                                        />
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="gap-2"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setPreviewModal({
+                                              url: previewBlobUrls[`boleto-${boleto.id}`],
+                                              title: boleto.arquivo_renomeado || boleto.arquivo_original,
+                                            });
+                                          }}
+                                        >
+                                          <Maximize2 className="h-3.5 w-3.5" />
+                                          Ampliar
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center justify-center h-32 text-muted-foreground">
+                                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                        Carregando preview...
+                                      </div>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </Fragment>
                         );
                       })}
                     </TableBody>
@@ -1593,6 +1725,23 @@ function OperationEditor({ tabId }: { tabId: string }) {
         </div>
       )}
 
+
+      {/* Preview modal */}
+      <Dialog open={!!previewModal} onOpenChange={() => setPreviewModal(null)}>
+        <DialogContent className="max-w-5xl w-[95vw]">
+          <DialogHeader>
+            <DialogTitle className="truncate">{previewModal?.title}</DialogTitle>
+            <DialogDescription>Preview do documento</DialogDescription>
+          </DialogHeader>
+          {previewModal && (
+            <iframe
+              src={previewModal.url}
+              className="w-full h-[75vh] rounded border bg-white"
+              title={previewModal.title}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Dialogs */}
       <Dialog open={confirmEnvioAuto} onOpenChange={setConfirmEnvioAuto}>

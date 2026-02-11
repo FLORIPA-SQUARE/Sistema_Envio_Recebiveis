@@ -20,6 +20,8 @@ Endpoints:
   PATCH  /operacoes/{id}/xmls/{xml_id}/emails    — Editar emails de um XML
   PATCH  /operacoes/{id}/envios/{eid}/status     — Marcar envio como enviado manualmente
   GET    /operacoes/{id}/relatorio       — Download de relatorio (TXT/JSON)
+  GET    /operacoes/{id}/boletos/{bid}/arquivo   — Download/preview arquivo boleto PDF
+  GET    /operacoes/{id}/xmls/{xid}/arquivo      — Download/preview arquivo XML
 """
 
 import logging
@@ -317,6 +319,69 @@ async def update_operacao(
         taxa_sucesso=op.taxa_sucesso,
         created_at=op.created_at,
         updated_at=op.updated_at,
+    )
+
+
+# ── GET /operacoes/{op_id}/boletos/{boleto_id}/arquivo ──────
+
+
+@router.get("/{op_id}/boletos/{boleto_id}/arquivo")
+async def download_boleto_arquivo(
+    op_id: str,
+    boleto_id: str,
+    db: AsyncSession = Depends(get_db),
+    _current_user: Usuario = Depends(get_current_user),
+):
+    """Serve o arquivo PDF de um boleto."""
+    op = await _get_operacao(op_id, db)
+    result = await db.execute(
+        select(Boleto).where(Boleto.id == boleto_id, Boleto.operacao_id == op.id)
+    )
+    boleto = result.scalar_one_or_none()
+    if not boleto or not boleto.arquivo_path:
+        raise HTTPException(status_code=404, detail="Arquivo do boleto nao encontrado")
+
+    file_path = Path(boleto.arquivo_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Arquivo do boleto nao encontrado no disco")
+
+    return FileResponse(
+        path=str(file_path),
+        media_type="application/pdf",
+        filename=boleto.arquivo_renomeado or boleto.arquivo_original,
+    )
+
+
+# ── GET /operacoes/{op_id}/xmls/{xml_id}/arquivo ───────────
+
+
+@router.get("/{op_id}/xmls/{xml_id}/arquivo")
+async def download_xml_arquivo(
+    op_id: str,
+    xml_id: str,
+    db: AsyncSession = Depends(get_db),
+    _current_user: Usuario = Depends(get_current_user),
+):
+    """Serve o arquivo XML/PDF de um XML da operacao."""
+    op = await _get_operacao(op_id, db)
+    result = await db.execute(
+        select(XmlNfe).where(XmlNfe.id == xml_id, XmlNfe.operacao_id == op.id)
+    )
+    xml = result.scalar_one_or_none()
+    if not xml:
+        raise HTTPException(status_code=404, detail="XML nao encontrado")
+
+    file_path = _operacao_dir(op.id) / "xmls" / xml.nome_arquivo
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Arquivo XML nao encontrado no disco")
+
+    suffix = file_path.suffix.lower()
+    media_type = "text/xml" if suffix == ".xml" else "application/pdf"
+
+    return FileResponse(
+        path=str(file_path),
+        media_type=media_type,
+        filename=xml.nome_arquivo,
     )
 
 

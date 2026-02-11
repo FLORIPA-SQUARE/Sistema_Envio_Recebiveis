@@ -345,6 +345,9 @@ async def download_boleto_arquivo(
         raise HTTPException(status_code=404, detail="Arquivo do boleto nao encontrado")
 
     file_path = Path(boleto.arquivo_path)
+    # Fallback: se o path original nao existe mas o arquivo foi renomeado
+    if not file_path.exists() and boleto.arquivo_renomeado:
+        file_path = file_path.parent / boleto.arquivo_renomeado
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Arquivo do boleto nao encontrado no disco")
 
@@ -836,9 +839,10 @@ async def processar_operacao(
         if xml_record:
             boleto.xml_nfe_id = xml_record.id
 
-        # Renomear arquivo fisicamente
+        # Renomear arquivo fisicamente e atualizar path no banco
         if boleto.arquivo_path and resultado.aprovado:
             _renomear_arquivo(Path(boleto.arquivo_path), nome_renomeado)
+            boleto.arquivo_path = str(Path(boleto.arquivo_path).parent / nome_renomeado)
 
         boletos_processados.append(BoletoCompleto.model_validate(boleto))
 
@@ -973,6 +977,7 @@ async def reprocessar_operacao(
             novos_aprovados += 1
             if boleto.arquivo_path:
                 _renomear_arquivo(Path(boleto.arquivo_path), nome_renomeado)
+                boleto.arquivo_path = str(Path(boleto.arquivo_path).parent / nome_renomeado)
         else:
             boleto.status = "rejeitado"
             boleto.motivo_rejeicao = resultado.motivo_rejeicao

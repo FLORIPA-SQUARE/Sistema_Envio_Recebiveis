@@ -9,6 +9,10 @@ from app.schemas.fidc import FidcResponse
 # ── Request schemas ───────────────────────────────────────────
 
 
+class XmlEmailsUpdate(BaseModel):
+    emails: list[str]
+
+
 class OperacaoCreate(BaseModel):
     fidc_id: uuid.UUID
     numero: str | None = None

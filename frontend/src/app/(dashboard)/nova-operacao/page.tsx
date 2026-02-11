@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -60,12 +60,14 @@ import {
   CheckCheck,
   Download,
   Trash2,
+  Pencil,
+  Plus,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { FileDropzone } from "@/components/file-dropzone";
 import { useOperationTabs, type OperationTab } from "@/contexts/operation-tabs";
 
-// ── Interfaces ────────────────────────────────────────────────
+// -- Interfaces --
 
 interface Fidc {
   id: string;
@@ -169,9 +171,9 @@ interface EnvioRecord {
   created_at: string;
 }
 
-type Step = "config" | "upload" | "result" | "envio" | "resumo";
+type Step = "config" | "upload" | "resultado";
 
-// ── Page (wrapper) ────────────────────────────────────────────
+// -- Page (wrapper) --
 
 export default function NovaOperacaoPage() {
   const { tabs, activeTabId, addTab } = useOperationTabs();
@@ -198,7 +200,7 @@ export default function NovaOperacaoPage() {
   );
 }
 
-// ── Operation Editor (all existing logic) ─────────────────────
+// -- Operation Editor (all existing logic) --
 
 function OperationEditor({ tabId }: { tabId: string }) {
   const router = useRouter();
@@ -288,6 +290,10 @@ function OperationEditor({ tabId }: { tabId: string }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [operacaoCreatedAt, setOperacaoCreatedAt] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<"finalizar" | "cancelar" | "excluir" | null>(null);
+  const [editingXmlId, setEditingXmlId] = useState<string | null>(null);
+  const [editEmailsList, setEditEmailsList] = useState<string[]>([]);
+  const [editEmailInput, setEditEmailInput] = useState("");
+  const [savingEmails, setSavingEmails] = useState(false);
 
   // Load FIDCs
   useEffect(() => {
@@ -321,7 +327,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
         setSavedNumero(op.numero);
         setOperacaoCreatedAt(op.created_at);
 
-        if (tab.step === "resumo" || tab.step === "envio" || tab.step === "result" || op.status === "em_processamento" || op.status === "concluida") {
+        if (tab.step === "resultado" || op.status === "em_processamento" || op.status === "concluida") {
           // Restore resultado from operation data
           setResultado({
             total: op.total_boletos,
@@ -330,19 +336,10 @@ function OperationEditor({ tabId }: { tabId: string }) {
             taxa_sucesso: op.taxa_sucesso,
             boletos: op.boletos,
           });
-          if (tab.step === "envio") {
-            setStep("envio");
-            apiFetch<EnvioRecord[]>(`/operacoes/${op.id}/envios`)
-              .then(setEnvios)
-              .catch(() => {});
-          } else if (tab.step === "resumo") {
-            setStep("resumo");
-            apiFetch<EnvioRecord[]>(`/operacoes/${op.id}/envios`)
-              .then(setEnvios)
-              .catch(() => {});
-          } else {
-            setStep("result");
-          }
+          setStep("resultado");
+          apiFetch<EnvioRecord[]>(`/operacoes/${op.id}/envios`)
+            .then(setEnvios)
+            .catch(() => {});
         } else {
           setStep("upload");
         }
@@ -361,7 +358,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
     updateTab(tabId, updates);
   }
 
-  // ── Step 1: Create operation ──────────────────────────────
+  // -- Step 1: Create operation --
 
   async function handleCreateOperation() {
     if (!selectedFidc) {
@@ -428,7 +425,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
     }
   }
 
-  // ── Step 2: Upload files ──────────────────────────────────
+  // -- Step 2: Upload files --
 
   async function handleUpload() {
     if (!operacaoId) return;
@@ -485,7 +482,50 @@ function OperationEditor({ tabId }: { tabId: string }) {
     }
   }
 
-  // ── Step 3: Process ───────────────────────────────────────
+  // -- Email editing --
+
+  function startEditEmails(xml: XmlResumo) {
+    setEditingXmlId(xml.id);
+    setEditEmailsList([...xml.emails, ...xml.emails_invalidos]);
+    setEditEmailInput("");
+  }
+
+  function addEmailToList() {
+    const trimmed = editEmailInput.trim();
+    if (trimmed && !editEmailsList.includes(trimmed)) {
+      setEditEmailsList([...editEmailsList, trimmed]);
+      setEditEmailInput("");
+    }
+  }
+
+  function removeEmailFromList(email: string) {
+    setEditEmailsList(editEmailsList.filter((e) => e !== email));
+  }
+
+  async function handleSaveEmails() {
+    if (!operacaoId || !editingXmlId) return;
+    setSavingEmails(true);
+    try {
+      const updated = await apiFetch<XmlResumo>(
+        `/operacoes/${operacaoId}/xmls/${editingXmlId}/emails`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ emails: editEmailsList }),
+        }
+      );
+      setUploadedXmls((prev) =>
+        prev.map((x) => (x.id === editingXmlId ? updated : x))
+      );
+      setEditingXmlId(null);
+      toast.success("Emails atualizados");
+    } catch {
+      toast.error("Erro ao salvar emails");
+    } finally {
+      setSavingEmails(false);
+    }
+  }
+
+  // -- Process --
 
   async function handleProcess() {
     if (!operacaoId) return;
@@ -497,8 +537,8 @@ function OperationEditor({ tabId }: { tabId: string }) {
         { method: "POST" }
       );
       setResultado(result);
-      setStep("result");
-      syncTab({ step: "result" });
+      setStep("resultado");
+      syncTab({ step: "resultado" });
       toast.success(
         `Processamento concluido: ${result.aprovados} aprovados, ${result.rejeitados} rejeitados`
       );
@@ -509,7 +549,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
     }
   }
 
-  // ── Step 4: Envio ────────────────────────────────────────
+  // -- Envio --
 
   function formatDate(dateStr: string) {
     return new Date(dateStr).toLocaleDateString("pt-BR", {
@@ -592,7 +632,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
     }
   }
 
-  // ── Step 5: Resumo (actions) ─────────────────────────────
+  // -- Resultado (actions) --
 
   async function handleReprocessar() {
     if (!operacaoId) return;
@@ -694,7 +734,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
     );
   }
 
-  // ── Render ────────────────────────────────────────────────
+  // -- Render --
 
   if (restoring) {
     return (
@@ -740,25 +780,29 @@ function OperationEditor({ tabId }: { tabId: string }) {
         const steps: { key: Step; label: string }[] = [
           { key: "config", label: "Configurar" },
           { key: "upload", label: "Upload" },
-          { key: "result", label: "Processamento" },
-          { key: "envio", label: "Envio" },
-          { key: "resumo", label: "Resultado" },
+          { key: "resultado", label: "Resultado" },
         ];
         const unlocked = !!operacaoId;
         const stepIdx = steps.findIndex((s) => s.key === step);
+        // Max reachable step based on actual progress
+        const hasResultado = !!resultado;
+        const maxStepIdx = !unlocked ? 0 : !hasResultado ? 1 : steps.length - 1;
 
         return (
           <div className="flex items-center gap-3">
             {steps.map((s, i) => {
               const isActive = step === s.key;
               const isPast = i < stepIdx;
-              const isLocked = !unlocked && i > 0;
+              const isBeyondMax = i > maxStepIdx;
 
-              // Locked steps: stacked to the right with overlap
-              if (isLocked) {
-                // Only render the group once (at index 1)
-                if (i > 1) return null;
-                const lockedSteps = steps.slice(1);
+              // Render locked group: stacked circles with lock icons
+              // Triggers at the first step beyond maxStepIdx
+              if (isBeyondMax) {
+                if (i > maxStepIdx + 1) return null; // only render once
+                const lockedSteps = steps.slice(maxStepIdx + 1);
+                const tooltipMsg = !unlocked
+                  ? "É necessário criar a operação para seguir para próximas etapas"
+                  : "É necessário processar a operação para avançar";
                 return (
                   <div
                     key="locked-group"
@@ -778,20 +822,19 @@ function OperationEditor({ tabId }: { tabId: string }) {
                         </div>
                       ))}
                     </div>
-                    {/* Tooltip */}
                     <div
                       className={`absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-popover px-3 py-1.5 text-xs text-popover-foreground shadow-md border transition-opacity duration-200 ${
                         lockedHover ? "opacity-100" : "opacity-0 pointer-events-none"
                       }`}
                     >
-                      É necessário criar a operação para seguir para próximas etapas
+                      {tooltipMsg}
                     </div>
                   </div>
                 );
               }
 
-              // Unlocked steps: clickable
-              const canClick = unlocked && !isActive;
+              // Reachable steps: clickable
+              const canClick = unlocked && !isActive && i <= maxStepIdx;
               const unlockAnim = justUnlocked && i > 0;
               return (
                 <div
@@ -815,7 +858,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                         : isPast
                         ? "bg-primary/20 text-primary hover:bg-primary/30 cursor-pointer"
                         : "bg-muted text-muted-foreground hover:bg-muted/80 cursor-pointer"
-                    } ${!canClick ? "" : "cursor-pointer"}`}
+                    }`}
                   >
                     {i + 1}
                   </button>
@@ -1007,14 +1050,89 @@ function OperationEditor({ tabId }: { tabId: string }) {
                             : "—"}
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-col gap-0.5">
-                            {xml.emails.map((e) => (
-                              <span key={e} className="text-xs">{e}</span>
-                            ))}
-                            {xml.emails_invalidos.map((e) => (
-                              <span key={e} className="text-xs text-destructive line-through">{e}</span>
-                            ))}
-                          </div>
+                          {editingXmlId === xml.id ? (
+                            <div className="space-y-2 min-w-[220px]">
+                              <div className="flex flex-wrap gap-1">
+                                {editEmailsList.map((email) => (
+                                  <span
+                                    key={email}
+                                    className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs"
+                                  >
+                                    {email}
+                                    <button
+                                      type="button"
+                                      onClick={() => removeEmailFromList(email)}
+                                      className="text-muted-foreground hover:text-destructive"
+                                    >
+                                      <XCircle className="h-3 w-3" />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                              <div className="flex gap-1">
+                                <Input
+                                  value={editEmailInput}
+                                  onChange={(e) => setEditEmailInput(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") { e.preventDefault(); addEmailToList(); }
+                                  }}
+                                  placeholder="novo@email.com"
+                                  className="h-7 text-xs"
+                                />
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 shrink-0"
+                                  onClick={addEmailToList}
+                                  disabled={!editEmailInput.trim()}
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={handleSaveEmails}
+                                  disabled={savingEmails}
+                                >
+                                  {savingEmails ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                                  Salvar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-xs"
+                                  onClick={() => setEditingXmlId(null)}
+                                >
+                                  Cancelar
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <div className="flex flex-col gap-0.5">
+                                {xml.emails.map((e) => (
+                                  <span key={e} className="text-xs">{e}</span>
+                                ))}
+                                {xml.emails_invalidos.map((e) => (
+                                  <span key={e} className="text-xs text-destructive line-through">{e}</span>
+                                ))}
+                                {xml.emails.length === 0 && xml.emails_invalidos.length === 0 && (
+                                  <span className="text-xs text-muted-foreground">—</span>
+                                )}
+                              </div>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 shrink-0"
+                                onClick={() => startEditEmails(xml)}
+                                title="Editar emails"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           {xml.xml_valido ? (
@@ -1052,7 +1170,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
             {addingToExisting && (
               <Button
                 variant="outline"
-                onClick={() => { setStep("resumo"); syncTab({ step: "resumo" }); }}
+                onClick={() => { setStep("resultado"); syncTab({ step: "resultado" }); }}
               >
                 Ver Resultado
               </Button>
@@ -1061,460 +1179,8 @@ function OperationEditor({ tabId }: { tabId: string }) {
         </div>
       )}
 
-      {/* Step 3: Result */}
-      {step === "result" && resultado && (
-        <div className="space-y-4">
-          {/* Boletos table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Boletos Processados</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Arquivo Renomeado</TableHead>
-                    <TableHead>Pagador</TableHead>
-                    <TableHead>NF</TableHead>
-                    <TableHead>Vencimento</TableHead>
-                    <TableHead className="text-right">Valor</TableHead>
-                    <TableHead>Motivo</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {resultado.boletos.map((b) => (
-                    <TableRow key={b.id}>
-                      <TableCell>
-                        {b.status === "aprovado" ? (
-                          <Badge className="bg-success text-success-foreground">Aprovado</Badge>
-                        ) : (
-                          <Badge variant="destructive">Rejeitado</Badge>
-                        )}
-                        {b.juros_detectado && (
-                          <Badge variant="outline" className="ml-1 border-warning text-warning">
-                            <AlertTriangle className="mr-1 h-3 w-3" />
-                            Juros
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-xs">
-                        {b.arquivo_renomeado || b.arquivo_original}
-                      </TableCell>
-                      <TableCell>{b.pagador || "—"}</TableCell>
-                      <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
-                        {b.numero_nota || "—"}
-                      </TableCell>
-                      <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
-                        {b.vencimento || "—"}
-                      </TableCell>
-                      <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
-                        {b.valor_formatado || "—"}
-                      </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-xs text-destructive">
-                        {b.motivo_rejeicao || ""}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex gap-3">
-            {resultado.aprovados > 0 && (
-              <Button onClick={() => { setStep("envio"); syncTab({ step: "envio" }); fetchEnvios(); }}>
-                <Send className="mr-2 h-4 w-4" />
-                Ir para Envio
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Step 4: Envio */}
-      {step === "envio" && operacaoId && (
-        <div className="space-y-4">
-          <Tabs defaultValue="envio" onValueChange={(v) => { if (v === "envio") fetchEnvios(); }}>
-            <TabsList>
-              <TabsTrigger value="boletos">
-                Boletos ({resultado?.total || 0})
-              </TabsTrigger>
-              <TabsTrigger value="xmls">
-                XMLs ({uploadedXmls.length})
-              </TabsTrigger>
-              <TabsTrigger value="envio">
-                Envio ({envios.length})
-              </TabsTrigger>
-            </TabsList>
-
-            {/* Sub-tab: Boletos */}
-            <TabsContent value="boletos" className="mt-4">
-              {resultado && resultado.boletos.length > 0 ? (
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Arquivo</TableHead>
-                          <TableHead>Pagador</TableHead>
-                          <TableHead>NF</TableHead>
-                          <TableHead>Vencimento</TableHead>
-                          <TableHead className="text-right">Valor</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {resultado.boletos.map((b) => (
-                          <TableRow key={b.id}>
-                            <TableCell>
-                              {b.status === "aprovado" ? (
-                                <Badge className="bg-success text-success-foreground">Aprovado</Badge>
-                              ) : (
-                                <Badge variant="destructive">Rejeitado</Badge>
-                              )}
-                            </TableCell>
-                            <TableCell className="max-w-[200px] truncate text-xs">
-                              {b.arquivo_renomeado || b.arquivo_original}
-                            </TableCell>
-                            <TableCell>{b.pagador || "—"}</TableCell>
-                            <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
-                              {b.numero_nota || "—"}
-                            </TableCell>
-                            <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
-                              {b.vencimento || "—"}
-                            </TableCell>
-                            <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
-                              {b.valor_formatado || "—"}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <p className="text-center text-muted-foreground py-8">Nenhum boleto processado</p>
-              )}
-            </TabsContent>
-
-            {/* Sub-tab: XMLs */}
-            <TabsContent value="xmls" className="mt-4">
-              {uploadedXmls.length > 0 ? (
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Arquivo</TableHead>
-                          <TableHead>NF</TableHead>
-                          <TableHead>Destinatario</TableHead>
-                          <TableHead>CNPJ</TableHead>
-                          <TableHead className="text-right">Valor</TableHead>
-                          <TableHead>Emails</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {uploadedXmls.map((x) => (
-                          <TableRow key={x.id}>
-                            <TableCell className="max-w-[150px] truncate text-xs">{x.nome_arquivo}</TableCell>
-                            <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
-                              {x.numero_nota}
-                            </TableCell>
-                            <TableCell>{x.nome_destinatario || "—"}</TableCell>
-                            <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
-                              {x.cnpj || "—"}
-                            </TableCell>
-                            <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
-                              {x.valor_total != null ? `R$ ${x.valor_total.toFixed(2)}` : "—"}
-                            </TableCell>
-                            <TableCell className="text-xs max-w-[200px] truncate">
-                              {x.emails.length > 0 ? x.emails.join(", ") : "—"}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <p className="text-center text-muted-foreground py-8">Nenhum XML carregado</p>
-              )}
-            </TabsContent>
-
-            {/* Sub-tab: Envio */}
-            <TabsContent value="envio" className="mt-4 space-y-4">
-              {/* Modo de envio + Botao */}
-              {resultado && resultado.aprovados > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Enviar Boletos por Email</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm font-medium">Modo:</span>
-                      <div className="flex rounded-lg border overflow-hidden">
-                        <button
-                          type="button"
-                          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                            envioMode === "preview"
-                              ? "bg-primary text-primary-foreground"
-                              : "hover:bg-muted"
-                          }`}
-                          onClick={() => setEnvioMode("preview")}
-                        >
-                          <Eye className="h-4 w-4" />
-                          Preview (Rascunho)
-                        </button>
-                        <button
-                          type="button"
-                          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                            envioMode === "automatico"
-                              ? "bg-primary text-primary-foreground"
-                              : "hover:bg-muted"
-                          }`}
-                          onClick={() => setEnvioMode("automatico")}
-                        >
-                          <Send className="h-4 w-4" />
-                          Automatico
-                        </button>
-                      </div>
-                    </div>
-
-                    <p className="text-sm text-muted-foreground">
-                      {envioMode === "preview"
-                        ? "Os emails serao criados como rascunhos no Outlook. Voce podera revisar e enviar manualmente."
-                        : "Os emails serao enviados diretamente pelo Outlook sem revisao previa."}
-                    </p>
-
-                    <div className="flex items-center gap-3">
-                      <Button
-                        onClick={() => {
-                          if (envioMode === "automatico") {
-                            setConfirmEnvioAuto(true);
-                          } else {
-                            handleEnviar();
-                          }
-                        }}
-                        disabled={envioLoading}
-                        className="gap-2"
-                      >
-                        {envioLoading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : envioMode === "preview" ? (
-                          <Eye className="h-4 w-4" />
-                        ) : (
-                          <Send className="h-4 w-4" />
-                        )}
-                        {envioLoading
-                          ? "Enviando..."
-                          : envioMode === "preview"
-                          ? "Criar Rascunhos"
-                          : "Enviar Emails"}
-                      </Button>
-                      <span className="text-sm text-muted-foreground">
-                        {resultado.aprovados} boleto(s) aprovado(s) para envio
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Resultado do envio recente */}
-              {envioResult && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Resultado do Envio</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex gap-6 mb-4">
-                      <div className="text-center">
-                        <div className="text-2xl font-bold font-[family-name:var(--font-barlow-condensed)]">
-                          {envioResult.emails_criados}
-                        </div>
-                        <div className="text-xs text-muted-foreground">Emails criados</div>
-                      </div>
-                      {envioResult.modo === "automatico" && (
-                        <div className="text-center">
-                          <div className="text-2xl font-bold font-[family-name:var(--font-barlow-condensed)] text-success">
-                            {envioResult.emails_enviados}
-                          </div>
-                          <div className="text-xs text-muted-foreground">Enviados</div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Destinatario</TableHead>
-                          <TableHead>CC</TableHead>
-                          <TableHead>Assunto</TableHead>
-                          <TableHead className="text-center">Boletos</TableHead>
-                          <TableHead className="text-center">XMLs</TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {envioResult.detalhes.map((d, i) => (
-                          <TableRow key={i}>
-                            <TableCell className="text-sm max-w-[200px] truncate">
-                              {d.email_para.join(", ")}
-                            </TableCell>
-                            <TableCell className="text-sm max-w-[150px] truncate">
-                              {d.email_cc.length > 0 ? d.email_cc.join(", ") : "—"}
-                            </TableCell>
-                            <TableCell className="text-sm max-w-[200px] truncate">
-                              {d.assunto}
-                            </TableCell>
-                            <TableCell className="text-center font-[family-name:var(--font-barlow-condensed)]">
-                              {d.boletos_count}
-                            </TableCell>
-                            <TableCell className="text-center font-[family-name:var(--font-barlow-condensed)]">
-                              {d.xmls_count}
-                            </TableCell>
-                            <TableCell>
-                              {d.status === "enviado" && (
-                                <Badge className="bg-success text-success-foreground">Enviado</Badge>
-                              )}
-                              {d.status === "rascunho" && (
-                                <Badge className="bg-warning text-warning-foreground">Rascunho</Badge>
-                              )}
-                              {d.status === "erro" && (
-                                <Badge variant="destructive">Erro</Badge>
-                              )}
-                              {!["enviado", "rascunho", "erro"].includes(d.status) && (
-                                <Badge variant="outline">{d.status}</Badge>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Historico de envios */}
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Mail className="h-4 w-4" />
-                    Historico de Envios
-                  </CardTitle>
-                  {envios.some((e) => e.status === "rascunho") && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleVerificarStatus}
-                      disabled={verificarLoading}
-                      className="gap-2"
-                    >
-                      {verificarLoading ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-3.5 w-3.5" />
-                      )}
-                      Verificar Status
-                    </Button>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  {enviosLoading ? (
-                    <p className="text-center text-muted-foreground py-4">Carregando...</p>
-                  ) : envios.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">
-                      Nenhum envio realizado ainda
-                    </p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Criado em</TableHead>
-                          <TableHead>Enviado em</TableHead>
-                          <TableHead>Destinatario</TableHead>
-                          <TableHead>Assunto</TableHead>
-                          <TableHead>Modo</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-center">Anexos</TableHead>
-                          <TableHead className="text-center">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {envios.map((envio) => (
-                          <TableRow key={envio.id}>
-                            <TableCell className="text-sm whitespace-nowrap">
-                              {formatDate(envio.created_at)}
-                            </TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">
-                              {envio.timestamp_envio ? formatDate(envio.timestamp_envio) : "—"}
-                            </TableCell>
-                            <TableCell className="text-sm max-w-[200px] truncate">
-                              {envio.email_para.join(", ")}
-                            </TableCell>
-                            <TableCell className="text-sm max-w-[200px] truncate">
-                              {envio.assunto}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline">
-                                {envio.modo === "preview" ? "Preview" : "Automatico"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {envio.status === "enviado" && (
-                                <Badge className="bg-success text-success-foreground">Enviado</Badge>
-                              )}
-                              {envio.status === "rascunho" && (
-                                <Badge className="bg-warning text-warning-foreground">Rascunho</Badge>
-                              )}
-                              {envio.status === "erro" && (
-                                <Badge variant="destructive" title={envio.erro_detalhes || ""}>Erro</Badge>
-                              )}
-                              {envio.status === "pendente" && (
-                                <Badge variant="outline">Pendente</Badge>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-center font-[family-name:var(--font-barlow-condensed)]">
-                              {envio.boletos_ids.length + envio.xmls_anexados.length}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {envio.status === "rascunho" ? (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setMarcarEnviadoId(envio.id)}
-                                  className="h-8 w-8 text-success hover:text-success"
-                                  title="Marcar como enviado"
-                                >
-                                  <CheckCircle2 className="h-4 w-4" />
-                                </Button>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
-      )}
-
-      {/* Step 5: Resumo */}
-      {step === "resumo" && operacaoId && resultado && (
+      {/* Step 3: Resultado */}
+      {step === "resultado" && operacaoId && resultado && (
         <div className="space-y-6">
           {/* Action bar: date + buttons */}
           <div className="flex items-center justify-between">
@@ -1770,7 +1436,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
               </Card>
             </TabsContent>
 
-            {/* Envio tab (same as step 4 envio sub-tab) */}
+            {/* Envio tab */}
             <TabsContent value="envio" className="mt-4 space-y-4">
               {resultado.aprovados > 0 && (
                 <Card>
@@ -1870,6 +1536,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
           </Tabs>
         </div>
       )}
+
 
       {/* Dialogs */}
       <Dialog open={confirmEnvioAuto} onOpenChange={setConfirmEnvioAuto}>

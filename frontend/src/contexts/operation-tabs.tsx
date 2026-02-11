@@ -12,7 +12,7 @@ export interface OperationTab {
   tabId: string;
   operacaoId: string | null;
   operacaoNumero: string | null;
-  step: "config" | "upload" | "result" | "envio" | "resumo";
+  step: "config" | "upload" | "resultado";
   fidcId: string;
   fidcNome: string;
   fidcCor: string;
@@ -117,7 +117,7 @@ export function OperationTabsProvider({ children }: { children: ReactNode }) {
         tabId,
         operacaoId: params.operacaoId,
         operacaoNumero: params.operacaoNumero,
-        step: "resumo",
+        step: "resultado",
         fidcId: params.fidcId || "",
         fidcNome: params.fidcNome || "",
         fidcCor: params.fidcCor || "",

@@ -17,6 +17,7 @@ Endpoints:
   POST   /operacoes/{id}/enviar          — Enviar emails via Outlook (preview/automatico)
   GET    /operacoes/{id}/envios          — Listar envios da operacao
   POST   /operacoes/{id}/envios/verificar-status — Verificar se rascunhos foram enviados
+  PATCH  /operacoes/{id}/xmls/{xml_id}/emails    — Editar emails de um XML
   PATCH  /operacoes/{id}/envios/{eid}/status     — Marcar envio como enviado manualmente
   GET    /operacoes/{id}/relatorio       — Download de relatorio (TXT/JSON)
 """
@@ -70,6 +71,7 @@ from app.schemas.operacao import (
     UploadXmlsResponse,
     VerificarStatusItem,
     VerificarStatusResultado,
+    XmlEmailsUpdate,
     XmlResumo,
 )
 from app.schemas.fidc import FidcResponse
@@ -315,6 +317,7 @@ async def update_operacao(
         total_rejeitados=op.total_rejeitados,
         taxa_sucesso=op.taxa_sucesso,
         created_at=op.created_at,
+        updated_at=op.updated_at,
     )
 
 
@@ -447,6 +450,12 @@ async def upload_xmls(
     )
     existing_nf_names = {row[0] for row in existing_nf.all()}
 
+    # Buscar numero_nota existentes (normalizados) para dedup XML vs PDF
+    existing_notas = await db.execute(
+        select(XmlNfe.numero_nota).where(XmlNfe.operacao_id == op.id)
+    )
+    existing_notas_set = {(row[0] or "").lstrip("0") or "0" for row in existing_notas.all()}
+
     op_dir = _operacao_dir(op.id)
     xmls_dir = op_dir / "xmls"
     xmls_dir.mkdir(parents=True, exist_ok=True)
@@ -455,7 +464,11 @@ async def upload_xmls(
     validos = 0
     invalidos = 0
 
-    for file in files:
+    # Ordenar: XMLs primeiro, PDFs depois (XMLs tem dados completos, PDFs sao skip se duplicado)
+    files_sorted = sorted(files, key=lambda f: 1 if (f.filename or "").lower().endswith(".pdf") else 0)
+    logger.info("UPLOAD_XMLS: %d arquivos recebidos, ordem: %s", len(files_sorted), [f.filename for f in files_sorted])
+
+    for file in files_sorted:
         # Validação: XML ou PDF
         if not file.filename or not file.filename.lower().endswith((".xml", ".pdf")):
             raise HTTPException(
@@ -479,9 +492,15 @@ async def upload_xmls(
 
         if is_pdf:
             # PDF de nota fiscal — salvar como anexo sem parse
-            # Extrair numero da nota do nome do arquivo (ex: 3-0318865.pdf → 0318865)
+            # Extrair numero da nota do nome do arquivo (ex: 3-0318865.pdf → 318865)
             stem = nf_path.stem
-            numero_nota = stem.split("-")[-1] if "-" in stem else stem
+            raw = stem.split("-")[-1] if "-" in stem else stem
+            numero_nota = raw.lstrip("0") or "0"
+
+            # Pular se ja existe um registro com mesmo numero_nota (ex: XML ja uploadado)
+            if numero_nota in existing_notas_set:
+                logger.info("DEDUP: PDF %s (NF %s) pulado — ja existe no set %s", file.filename, numero_nota, existing_notas_set)
+                continue
 
             xml_record = XmlNfe(
                 operacao_id=op.id,
@@ -498,10 +517,16 @@ async def upload_xmls(
             )
             db.add(xml_record)
             await db.flush()
+            existing_notas_set.add(numero_nota)
             validos += 1
         else:
             # Parse XML NFe
             dados = parse_xml_nfe(nf_path)
+            nf_normalizado = (dados.numero_nota or "").lstrip("0") or "0"
+
+            # Pular se ja existe registro com mesmo numero_nota
+            if nf_normalizado in existing_notas_set:
+                continue
 
             xml_record = XmlNfe(
                 operacao_id=op.id,
@@ -518,6 +543,7 @@ async def upload_xmls(
             )
             db.add(xml_record)
             await db.flush()
+            existing_notas_set.add(nf_normalizado)
 
             if dados.xml_valido:
                 validos += 1
@@ -1188,6 +1214,50 @@ async def verificar_status_envios(
         atualizados=atualizados,
         itens=itens,
     )
+
+
+# ── PATCH /operacoes/{id}/xmls/{xml_id}/emails ───────────────
+
+
+@router.patch("/{op_id}/xmls/{xml_id}/emails", response_model=XmlResumo)
+async def atualizar_emails_xml(
+    op_id: str,
+    xml_id: str,
+    body: XmlEmailsUpdate,
+    db: AsyncSession = Depends(get_db),
+    _current_user: Usuario = Depends(get_current_user),
+):
+    """Edita os emails de destino de um XML."""
+    import re
+
+    await _get_operacao(op_id, db)
+
+    result = await db.execute(
+        select(XmlNfe).where(XmlNfe.id == xml_id, XmlNfe.operacao_id == op_id)
+    )
+    xml = result.scalar_one_or_none()
+    if not xml:
+        raise HTTPException(status_code=404, detail="XML nao encontrado")
+
+    email_pattern = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    valid_emails: list[str] = []
+    invalid_emails: list[str] = []
+    for email in body.emails:
+        email = email.strip()
+        if not email:
+            continue
+        if email_pattern.match(email):
+            valid_emails.append(email)
+        else:
+            invalid_emails.append(email)
+
+    xml.emails = valid_emails
+    xml.emails_invalidos = invalid_emails
+
+    await db.commit()
+    await db.refresh(xml)
+
+    return XmlResumo.model_validate(xml)
 
 
 # ── PATCH /operacoes/{id}/envios/{envio_id}/status ──────────

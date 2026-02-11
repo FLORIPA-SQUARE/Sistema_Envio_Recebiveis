@@ -25,8 +25,9 @@ export function FileDropzone({
     (e: React.DragEvent) => {
       e.preventDefault();
       setDragOver(false);
+      const exts = accept.split(",").map((a) => a.trim().toLowerCase());
       const droppedFiles = Array.from(e.dataTransfer.files).filter((f) =>
-        f.name.toLowerCase().endsWith(accept.replace(".", ""))
+        exts.some((ext) => f.name.toLowerCase().endsWith(ext))
       );
       onFilesChange([...files, ...droppedFiles]);
     },

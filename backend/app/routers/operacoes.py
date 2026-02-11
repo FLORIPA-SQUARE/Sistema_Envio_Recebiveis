@@ -25,15 +25,17 @@ Endpoints:
   GET    /operacoes/{id}/xmls/{xid}/arquivo      — Download/preview arquivo XML
 """
 
+import io
 import logging
 import shutil
 import uuid
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pdfplumber
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -471,6 +473,85 @@ async def preview_envio(
         total_grupos=len(preview_grupos),
         total_aprovados=len(boletos_aprovados),
         grupos=preview_grupos,
+    )
+
+
+# ── GET /operacoes/{id}/download-arquivos ──────────────────
+
+
+@router.get("/{op_id}/download-arquivos")
+async def download_arquivos(
+    op_id: str,
+    tipo: str,
+    db: AsyncSession = Depends(get_db),
+    _current_user: Usuario = Depends(get_current_user),
+):
+    """Baixa ZIP com todos os arquivos de um tipo (boletos, xmls, nfs)."""
+    op = await _get_operacao(op_id, db)
+    op_dir = _operacao_dir(op.id)
+
+    label = op.numero or str(op.id)[:8]
+
+    if tipo == "boletos":
+        source_dir = op_dir / "boletos"
+        ext_filter = ".pdf"
+        zip_name = f"boletos_{label}.zip"
+    elif tipo == "xmls":
+        source_dir = op_dir / "xmls"
+        ext_filter = ".xml"
+        zip_name = f"xmls_{label}.zip"
+    elif tipo == "nfs":
+        source_dir = op_dir / "xmls"
+        ext_filter = ".pdf"
+        zip_name = f"notas_fiscais_{label}.zip"
+    else:
+        raise HTTPException(status_code=400, detail="tipo deve ser: boletos, xmls ou nfs")
+
+    # Para boletos, usar registros do DB com nomes renomeados
+    if tipo == "boletos":
+        boletos_result = await db.execute(
+            select(Boleto).where(Boleto.operacao_id == op.id)
+        )
+        boletos_all = boletos_result.scalars().all()
+        arquivos_boleto: list[tuple[Path, str]] = []
+        for b in boletos_all:
+            if not b.arquivo_path:
+                continue
+            file_path = Path(b.arquivo_path)
+            if not file_path.exists():
+                continue
+            zip_name_entry = b.arquivo_renomeado or file_path.name
+            arquivos_boleto.append((file_path, zip_name_entry))
+
+        if not arquivos_boleto:
+            raise HTTPException(status_code=404, detail="Nenhum arquivo encontrado para download")
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for file_path, entry_name in arquivos_boleto:
+                zf.write(file_path, entry_name)
+    else:
+        if not source_dir.exists():
+            raise HTTPException(status_code=404, detail="Diretorio de arquivos nao encontrado")
+
+        arquivos = [
+            f for f in sorted(source_dir.iterdir())
+            if f.is_file() and f.name.lower().endswith(ext_filter)
+        ]
+
+        if not arquivos:
+            raise HTTPException(status_code=404, detail="Nenhum arquivo encontrado para download")
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for f in arquivos:
+                zf.write(f, f.name)
+
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_name}"'},
     )
 
 

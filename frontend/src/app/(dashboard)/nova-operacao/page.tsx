@@ -783,6 +783,31 @@ function OperationEditor({ tabId }: { tabId: string }) {
     );
   }
 
+  async function handleDownloadZip(tipo: "boletos" | "xmls" | "nfs") {
+    if (!operacaoId) return;
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/v1/operacoes/${operacaoId}/download-arquivos?tipo=${tipo}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.detail || "Erro ao baixar");
+      }
+      const blob = await res.blob();
+      if (blob.size === 0) throw new Error("Arquivo vazio");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.headers.get("content-disposition")?.match(/filename="(.+)"/)?.[1] || `${tipo}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1000);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao baixar arquivos");
+    }
+  }
+
   function CamadaLine({ camada }: { camada: CamadaResult | null }) {
     if (!camada) return <span className="text-muted-foreground">N/A</span>;
     return (
@@ -1088,8 +1113,11 @@ function OperationEditor({ tabId }: { tabId: string }) {
           {/* Uploaded XMLs preview table (only .xml files) */}
           {uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).length > 0 && (
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-base">XMLs Parseados ({uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).length})</CardTitle>
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => handleDownloadZip("xmls")}>
+                  <Download className="h-3.5 w-3.5" /> Baixar Todos os XMLs
+                </Button>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
@@ -1272,8 +1300,11 @@ function OperationEditor({ tabId }: { tabId: string }) {
             );
             return (
               <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-base">Notas Fiscais ({nfPdfs.length})</CardTitle>
+                  <Button variant="outline" size="sm" className="gap-2" onClick={() => handleDownloadZip("nfs")}>
+                    <Download className="h-3.5 w-3.5" /> Baixar Todas as Notas Fiscais
+                  </Button>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
@@ -1377,8 +1408,11 @@ function OperationEditor({ tabId }: { tabId: string }) {
             );
             return (
               <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-base">Boletos Carregados ({uploadedBoletos.length})</CardTitle>
+                  <Button variant="outline" size="sm" className="gap-2" onClick={() => handleDownloadZip("boletos")}>
+                    <Download className="h-3.5 w-3.5" /> Baixar Todos os Boletos
+                  </Button>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
@@ -1937,31 +1971,47 @@ function OperationEditor({ tabId }: { tabId: string }) {
               <TabsTrigger value="envio" onClick={() => fetchEnvios()}>Envio ({envios.length})</TabsTrigger>
             </TabsList>
 
-            {/* Boletos tab with expandable validation */}
+            {/* Boletos tab with expandable validation + preview */}
             <TabsContent value="boletos" className="mt-4">
               <Card>
-                <CardContent className="pt-6">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-base">Boletos ({resultado.boletos.length})</CardTitle>
+                  {resultado.boletos.length > 0 && (
+                    <Button variant="outline" size="sm" className="gap-2" onClick={() => handleDownloadZip("boletos")}>
+                      <Download className="h-3.5 w-3.5" /> Baixar Todos os Boletos
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent>
                   {resultado.boletos.length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">
                       Nenhum boleto nesta operacao
                     </p>
-                  ) : (
+                  ) : (() => {
+                    const xmlByNota = new Map(
+                      uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).map((x) => [(x.numero_nota || "").replace(/^0+/, "") || "0", x])
+                    );
+                    return (
                     <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-8"></TableHead>
+                          <TableHead className="w-8 px-2" />
                           <TableHead>Status</TableHead>
                           <TableHead>Arquivo</TableHead>
-                          <TableHead>Pagador</TableHead>
                           <TableHead>NF</TableHead>
-                          <TableHead>Vencimento</TableHead>
                           <TableHead className="text-right">Valor</TableHead>
+                          <TableHead>Vencimento</TableHead>
+                          <TableHead>Destinatário</TableHead>
+                          <TableHead>Email</TableHead>
                           <TableHead>Motivo</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {resultado.boletos.map((boleto) => (
+                        {resultado.boletos.map((boleto) => {
+                          const nfKey = (boleto.numero_nota || "").replace(/^0+/, "") || "0";
+                          const xml = xmlByNota.get(nfKey);
+                          return (
                           <Fragment key={boleto.id}>
                             <TableRow
                               className="cursor-pointer hover:bg-muted/50"
@@ -1971,11 +2021,11 @@ function OperationEditor({ tabId }: { tabId: string }) {
                                 )
                               }
                             >
-                              <TableCell>
+                              <TableCell className="w-8 px-2">
                                 {expandedBoleto === boleto.id ? (
-                                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                                ) : (
                                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
                                 )}
                               </TableCell>
                               <TableCell>
@@ -1990,39 +2040,181 @@ function OperationEditor({ tabId }: { tabId: string }) {
                                   )}
                                 </div>
                               </TableCell>
-                              <TableCell className="max-w-xs truncate text-sm" title={boleto.arquivo_renomeado || boleto.arquivo_original}>
+                              <TableCell className="max-w-[200px] truncate text-sm" title={boleto.arquivo_renomeado || boleto.arquivo_original}>
                                 {boleto.arquivo_renomeado || boleto.arquivo_original}
                               </TableCell>
-                              <TableCell className="max-w-[180px] truncate">{boleto.pagador || "—"}</TableCell>
-                              <TableCell className="font-[family-name:var(--font-barlow-condensed)]">{boleto.numero_nota || "—"}</TableCell>
-                              <TableCell>{boleto.vencimento || "—"}</TableCell>
+                              <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">{boleto.numero_nota || "—"}</TableCell>
                               <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
                                 {boleto.valor_formatado || "—"}
+                              </TableCell>
+                              <TableCell className="font-[family-name:var(--font-barlow-condensed)]">{boleto.vencimento || "—"}</TableCell>
+                              <TableCell className="max-w-[180px] truncate">
+                                {xml?.nome_destinatario || "—"}
+                              </TableCell>
+                              <TableCell className="max-w-[200px] truncate text-sm">
+                                {xml && xml.emails.length > 0 ? xml.emails.join(", ") : "—"}
                               </TableCell>
                               <TableCell className="max-w-[200px] truncate text-sm text-destructive">
                                 {boleto.motivo_rejeicao || ""}
                               </TableCell>
                             </TableRow>
 
-                            {/* Expanded: 5 camadas */}
-                            {expandedBoleto === boleto.id && (
+                            {/* Expanded: 5 camadas + preview PDF */}
+                            {expandedBoleto === boleto.id && (() => {
+                              const blobKey = `boleto-${boleto.id}`;
+                              if (!previewBlobUrls[blobKey] && operacaoId) {
+                                loadPreview(`/operacoes/${operacaoId}/boletos/${boleto.id}/arquivo`, blobKey);
+                              }
+                              return (
                               <TableRow>
-                                <TableCell colSpan={8}>
-                                  <div className="rounded-lg bg-muted/30 p-4 space-y-2">
-                                    <p className="text-sm font-semibold mb-3">Validacao em 5 Camadas</p>
-                                    <CamadaLine camada={boleto.validacao_camada1} />
-                                    <CamadaLine camada={boleto.validacao_camada2} />
-                                    <CamadaLine camada={boleto.validacao_camada3} />
-                                    <CamadaLine camada={boleto.validacao_camada4} />
-                                    <CamadaLine camada={boleto.validacao_camada5} />
-                                    {boleto.juros_detectado && (
-                                      <>
-                                        <Separator className="my-2" />
-                                        <div className="flex items-center gap-2 text-sm text-warning">
-                                          <AlertTriangle className="h-4 w-4" />
-                                          Juros/multa detectado neste boleto
-                                        </div>
-                                      </>
+                                <TableCell colSpan={9} className="p-0">
+                                  <div className="bg-muted/30 p-4 space-y-4">
+                                    {/* Preview PDF */}
+                                    {previewBlobUrls[blobKey] ? (
+                                      <div className="space-y-2">
+                                        <iframe
+                                          src={previewBlobUrls[blobKey]}
+                                          className="w-full h-64 rounded border bg-white"
+                                          title={boleto.arquivo_renomeado || boleto.arquivo_original}
+                                        />
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="gap-2"
+                                          onClick={(e) => { e.stopPropagation(); setPreviewModal({ url: previewBlobUrls[blobKey], title: boleto.arquivo_renomeado || boleto.arquivo_original }); }}
+                                        >
+                                          <Maximize2 className="h-3.5 w-3.5" />
+                                          Ampliar
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center justify-center h-32 text-muted-foreground">
+                                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                        Carregando preview...
+                                      </div>
+                                    )}
+                                    {/* 5 Camadas */}
+                                    <div className="rounded-lg bg-background p-4 space-y-2">
+                                      <p className="text-sm font-semibold mb-3">Validacao em 5 Camadas</p>
+                                      <CamadaLine camada={boleto.validacao_camada1} />
+                                      <CamadaLine camada={boleto.validacao_camada2} />
+                                      <CamadaLine camada={boleto.validacao_camada3} />
+                                      <CamadaLine camada={boleto.validacao_camada4} />
+                                      <CamadaLine camada={boleto.validacao_camada5} />
+                                      {boleto.juros_detectado && (
+                                        <>
+                                          <Separator className="my-2" />
+                                          <div className="flex items-center gap-2 text-sm text-warning">
+                                            <AlertTriangle className="h-4 w-4" />
+                                            Juros/multa detectado neste boleto
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                              );
+                            })()}
+                          </Fragment>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                    </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* XMLs tab (only .xml files) */}
+            <TabsContent value="xmls" className="mt-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-base">XMLs ({uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).length})</CardTitle>
+                  {uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).length > 0 && (
+                    <Button variant="outline" size="sm" className="gap-2" onClick={() => handleDownloadZip("xmls")}>
+                      <Download className="h-3.5 w-3.5" /> Baixar Todos os XMLs
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  {uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">Nenhum XML nesta operacao</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-8 px-2" />
+                          <TableHead>Arquivo</TableHead>
+                          <TableHead>NF</TableHead>
+                          <TableHead className="text-right">Valor</TableHead>
+                          <TableHead>Destinatário</TableHead>
+                          <TableHead>CNPJ</TableHead>
+                          <TableHead>Emails</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).map((xml) => (
+                          <Fragment key={xml.id}>
+                            <TableRow
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => {
+                                const isExpanding = expandedUploadXml !== xml.id;
+                                setExpandedUploadXml(isExpanding ? xml.id : null);
+                                if (isExpanding && operacaoId) {
+                                  loadPreview(`/operacoes/${operacaoId}/xmls/${xml.id}/arquivo`, `xml-${xml.id}`);
+                                }
+                              }}
+                            >
+                              <TableCell className="w-8 px-2">
+                                {expandedUploadXml === xml.id
+                                  ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                  : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                              </TableCell>
+                              <TableCell className="max-w-[200px] truncate text-sm" title={xml.nome_arquivo}>
+                                {xml.nome_arquivo}
+                              </TableCell>
+                              <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
+                                {xml.numero_nota}
+                              </TableCell>
+                              <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
+                                {xml.valor_total != null ? `R$ ${xml.valor_total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"}
+                              </TableCell>
+                              <TableCell className="max-w-[180px] truncate">{xml.nome_destinatario || "—"}</TableCell>
+                              <TableCell className="font-[family-name:var(--font-barlow-condensed)]">{xml.cnpj || "—"}</TableCell>
+                              <TableCell className="max-w-[200px] truncate text-sm">
+                                {xml.emails.length > 0 ? xml.emails.join(", ") : "—"}
+                              </TableCell>
+                            </TableRow>
+                            {expandedUploadXml === xml.id && (
+                              <TableRow>
+                                <TableCell colSpan={7} className="p-0">
+                                  <div className="bg-muted/30 p-4">
+                                    {previewBlobUrls[`xml-${xml.id}`] ? (
+                                      <div className="space-y-2">
+                                        <iframe
+                                          src={previewBlobUrls[`xml-${xml.id}`]}
+                                          className="w-full h-64 rounded border bg-white"
+                                          title={xml.nome_arquivo}
+                                        />
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="gap-2"
+                                          onClick={(e) => { e.stopPropagation(); setPreviewModal({ url: previewBlobUrls[`xml-${xml.id}`], title: xml.nome_arquivo }); }}
+                                        >
+                                          <Maximize2 className="h-3.5 w-3.5" />
+                                          Ampliar
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center justify-center h-32 text-muted-foreground">
+                                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                        Carregando preview...
+                                      </div>
                                     )}
                                   </div>
                                 </TableCell>
@@ -2038,52 +2230,18 @@ function OperationEditor({ tabId }: { tabId: string }) {
               </Card>
             </TabsContent>
 
-            {/* XMLs tab (only .xml files) */}
-            <TabsContent value="xmls" className="mt-4">
-              <Card>
-                <CardContent className="pt-6">
-                  {uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">Nenhum XML nesta operacao</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Arquivo</TableHead>
-                          <TableHead>NF</TableHead>
-                          <TableHead>CNPJ</TableHead>
-                          <TableHead>Destinatario</TableHead>
-                          <TableHead className="text-right">Valor</TableHead>
-                          <TableHead>Emails</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).map((x) => (
-                          <TableRow key={x.id}>
-                            <TableCell className="max-w-[200px] truncate text-sm">{x.nome_arquivo}</TableCell>
-                            <TableCell className="font-[family-name:var(--font-barlow-condensed)]">{x.numero_nota}</TableCell>
-                            <TableCell className="text-sm">{x.cnpj || "—"}</TableCell>
-                            <TableCell className="max-w-[180px] truncate">{x.nome_destinatario || "—"}</TableCell>
-                            <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
-                              {x.valor_total != null ? `R$ ${x.valor_total.toFixed(2)}` : "—"}
-                            </TableCell>
-                            <TableCell className="max-w-[200px] truncate text-sm">
-                              {x.emails.length > 0 ? x.emails.join(", ") : "—"}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
             {/* Notas Fiscais PDF tab */}
             <TabsContent value="nfs" className="mt-4">
               <Card>
-                <CardContent className="pt-6">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-base">Notas Fiscais ({uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".pdf")).length})</CardTitle>
+                  {uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".pdf")).length > 0 && (
+                    <Button variant="outline" size="sm" className="gap-2" onClick={() => handleDownloadZip("nfs")}>
+                      <Download className="h-3.5 w-3.5" /> Baixar Todas as Notas Fiscais
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent>
                   {uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".pdf")).length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">Nenhuma nota fiscal em PDF nesta operacao</p>
                   ) : (() => {

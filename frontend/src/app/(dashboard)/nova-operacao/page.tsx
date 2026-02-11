@@ -1938,7 +1938,8 @@ function OperationEditor({ tabId }: { tabId: string }) {
           <Tabs defaultValue="boletos">
             <TabsList>
               <TabsTrigger value="boletos">Boletos ({resultado.boletos.length})</TabsTrigger>
-              <TabsTrigger value="xmls">XMLs ({uploadedXmls.length})</TabsTrigger>
+              <TabsTrigger value="xmls">XMLs ({uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).length})</TabsTrigger>
+              <TabsTrigger value="nfs">Notas Fiscais ({uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".pdf")).length})</TabsTrigger>
               <TabsTrigger value="envio" onClick={() => fetchEnvios()}>Envio ({envios.length})</TabsTrigger>
             </TabsList>
 
@@ -2043,11 +2044,11 @@ function OperationEditor({ tabId }: { tabId: string }) {
               </Card>
             </TabsContent>
 
-            {/* XMLs tab */}
+            {/* XMLs tab (only .xml files) */}
             <TabsContent value="xmls" className="mt-4">
               <Card>
                 <CardContent className="pt-6">
-                  {uploadedXmls.length === 0 ? (
+                  {uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">Nenhum XML nesta operacao</p>
                   ) : (
                     <div className="overflow-x-auto">
@@ -2063,7 +2064,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {uploadedXmls.map((x) => (
+                        {uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).map((x) => (
                           <TableRow key={x.id}>
                             <TableCell className="max-w-[200px] truncate text-sm">{x.nome_arquivo}</TableCell>
                             <TableCell className="font-[family-name:var(--font-barlow-condensed)]">{x.numero_nota}</TableCell>
@@ -2081,6 +2082,113 @@ function OperationEditor({ tabId }: { tabId: string }) {
                     </Table>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Notas Fiscais PDF tab */}
+            <TabsContent value="nfs" className="mt-4">
+              <Card>
+                <CardContent className="pt-6">
+                  {uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".pdf")).length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">Nenhuma nota fiscal em PDF nesta operacao</p>
+                  ) : (() => {
+                    const nfPdfs = uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".pdf"));
+                    const boletaByNota = new Map(
+                      uploadedBoletos.map((b) => [(b.numero_nota || "").replace(/^0+/, "") || "0", b])
+                    );
+                    return (
+                      <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-8 px-2" />
+                            <TableHead>Arquivo</TableHead>
+                            <TableHead>NF</TableHead>
+                            <TableHead>Pagador</TableHead>
+                            <TableHead>Vencimento</TableHead>
+                            <TableHead className="text-right">Valor</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {nfPdfs.map((nf) => {
+                            const nfKey = (nf.numero_nota || "").replace(/^0+/, "") || "0";
+                            const boleto = boletaByNota.get(nfKey);
+                            return (
+                              <Fragment key={nf.id}>
+                                <TableRow
+                                  className="cursor-pointer hover:bg-muted/50"
+                                  onClick={() => {
+                                    const isExpanding = expandedUploadNf !== nf.id;
+                                    setExpandedUploadNf(isExpanding ? nf.id : null);
+                                    if (isExpanding && operacaoId) {
+                                      loadPreview(`/operacoes/${operacaoId}/xmls/${nf.id}/arquivo`, `xml-${nf.id}`);
+                                    }
+                                  }}
+                                >
+                                  <TableCell className="w-8 px-2">
+                                    {expandedUploadNf === nf.id
+                                      ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                      : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                                  </TableCell>
+                                  <TableCell className="max-w-[250px] truncate text-sm" title={nf.nome_arquivo}>
+                                    {nf.nome_arquivo}
+                                  </TableCell>
+                                  <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
+                                    {nf.numero_nota || "—"}
+                                  </TableCell>
+                                  <TableCell className="max-w-[180px] truncate">
+                                    {boleto?.pagador || "—"}
+                                  </TableCell>
+                                  <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
+                                    {boleto?.vencimento || "—"}
+                                  </TableCell>
+                                  <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
+                                    {boleto?.valor_formatado || "—"}
+                                  </TableCell>
+                                </TableRow>
+                                {expandedUploadNf === nf.id && (
+                                  <TableRow>
+                                    <TableCell colSpan={6} className="p-0">
+                                      <div className="bg-muted/30 p-4">
+                                        {previewBlobUrls[`xml-${nf.id}`] ? (
+                                          <div className="space-y-2">
+                                            <iframe
+                                              src={previewBlobUrls[`xml-${nf.id}`]}
+                                              className="w-full h-64 rounded border bg-white"
+                                              title={nf.nome_arquivo}
+                                            />
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              className="gap-2"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setPreviewModal({ url: previewBlobUrls[`xml-${nf.id}`], title: nf.nome_arquivo });
+                                              }}
+                                            >
+                                              <Maximize2 className="h-3.5 w-3.5" />
+                                              Ampliar
+                                            </Button>
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center justify-center h-32 text-muted-foreground">
+                                            <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                            Carregando preview...
+                                          </div>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </TabsContent>

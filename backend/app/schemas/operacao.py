@@ -83,6 +83,7 @@ class XmlResumo(BaseModel):
     emails: list[str]
     emails_invalidos: list[str]
     xml_valido: bool
+    duplicatas: list[dict] = []
 
     model_config = {"from_attributes": True}
 

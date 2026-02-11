@@ -88,6 +88,7 @@ interface XmlResumo {
   emails: string[];
   emails_invalidos: string[];
   xml_valido: boolean;
+  duplicatas: Array<{ numero: string; vencimento: string; valor: number }>;
 }
 
 interface CamadaResult {
@@ -912,6 +913,22 @@ function OperationEditor({ tabId }: { tabId: string }) {
     );
   }
 
+  function getParcelaLabel(boleto: BoletoCompleto, xml: XmlResumo | null | undefined): string | null {
+    if (!xml || !xml.duplicatas || xml.duplicatas.length <= 1) return null;
+    const bVenc = boleto.vencimento; // "DD-MM"
+    if (!bVenc) return null;
+    for (let i = 0; i < xml.duplicatas.length; i++) {
+      const dup = xml.duplicatas[i];
+      if (!dup.vencimento) continue;
+      const parts = dup.vencimento.split("-"); // "YYYY-MM-DD" → [YYYY, MM, DD]
+      if (parts.length === 3) {
+        const dupDDMM = `${parts[2]}-${parts[1]}`;
+        if (dupDDMM === bVenc) return `${i + 1}/${xml.duplicatas.length}`;
+      }
+    }
+    return null;
+  }
+
   // -- Render --
 
   if (restoring) {
@@ -1491,6 +1508,16 @@ function OperationEditor({ tabId }: { tabId: string }) {
             const xmlByNota = new Map(
               uploadedXmls.map((x) => [x.numero_nota.replace(/^0+/, "") || "0", x])
             );
+            // Agrupamento visual por NF
+            const nfGroups = new Map<string, number>();
+            uploadedBoletos.forEach(b => {
+              const nf = (b.numero_nota || "").replace(/^0+/, "") || "0";
+              nfGroups.set(nf, (nfGroups.get(nf) || 0) + 1);
+            });
+            const groupColors = ["border-l-blue-500", "border-l-orange-500", "border-l-emerald-500", "border-l-purple-500"];
+            let colorIdx = 0;
+            const nfColorMap = new Map<string, string>();
+
             return (
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
@@ -1517,10 +1544,17 @@ function OperationEditor({ tabId }: { tabId: string }) {
                       {uploadedBoletos.map((boleto) => {
                         const nfKey = (boleto.numero_nota || "").replace(/^0+/, "") || "0";
                         const xml = xmlByNota.get(nfKey);
+                        const isGroup = (nfGroups.get(nfKey) || 0) > 1;
+                        let groupClass = "";
+                        if (isGroup) {
+                          if (!nfColorMap.has(nfKey)) { nfColorMap.set(nfKey, groupColors[colorIdx % groupColors.length]); colorIdx++; }
+                          groupClass = `border-l-4 ${nfColorMap.get(nfKey)}`;
+                        }
+                        const parcela = getParcelaLabel(boleto, xml);
                         return (
                           <Fragment key={boleto.id}>
                             <TableRow
-                              className="cursor-pointer hover:bg-muted/50"
+                              className={`cursor-pointer hover:bg-muted/50 ${groupClass}`}
                               onClick={() => {
                                 const isExpanding = expandedUploadBoleto !== boleto.id;
                                 setExpandedUploadBoleto(isExpanding ? boleto.id : null);
@@ -1539,6 +1573,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                               </TableCell>
                               <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
                                 {boleto.numero_nota || "—"}
+                                {parcela && <Badge variant="outline" className="ml-2 text-xs font-normal">Parcela {parcela}</Badge>}
                               </TableCell>
                               <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
                                 {boleto.valor_formatado || "—"}
@@ -1890,10 +1925,12 @@ function OperationEditor({ tabId }: { tabId: string }) {
                                         {grupo.boletos.map((boleto) => {
                                           const nfKey = (boleto.numero_nota || "").replace(/^0+/, "") || "0";
                                           const xmlMatch = grupo.xmls.find(x => ((x.numero_nota || "").replace(/^0+/, "") || "0") === nfKey) || null;
+                                          const parcela = getParcelaLabel(boleto, xmlMatch);
                                           return (
                                             <div key={`confronto-${boleto.id}`} className="border rounded-lg p-3 bg-background">
                                               <p className="text-xs font-medium mb-2 truncate" title={boleto.arquivo_renomeado || boleto.arquivo_original}>
                                                 {boleto.arquivo_renomeado || boleto.arquivo_original}
+                                                {parcela && <Badge variant="outline" className="ml-2 text-xs font-normal">Parcela {parcela}</Badge>}
                                               </p>
                                               <ConfrontoBoletoNF boleto={boleto} xml={xmlMatch} />
                                             </div>
@@ -2098,6 +2135,16 @@ function OperationEditor({ tabId }: { tabId: string }) {
                     const xmlByNota = new Map(
                       uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).map((x) => [(x.numero_nota || "").replace(/^0+/, "") || "0", x])
                     );
+                    // Agrupamento visual por NF
+                    const nfGroups = new Map<string, number>();
+                    resultado.boletos.forEach(b => {
+                      const nf = (b.numero_nota || "").replace(/^0+/, "") || "0";
+                      nfGroups.set(nf, (nfGroups.get(nf) || 0) + 1);
+                    });
+                    const groupColors = ["border-l-blue-500", "border-l-orange-500", "border-l-emerald-500", "border-l-purple-500"];
+                    let colorIdx = 0;
+                    const nfColorMap = new Map<string, string>();
+
                     return (
                     <div className="overflow-x-auto">
                     <Table>
@@ -2118,10 +2165,17 @@ function OperationEditor({ tabId }: { tabId: string }) {
                         {resultado.boletos.map((boleto) => {
                           const nfKey = (boleto.numero_nota || "").replace(/^0+/, "") || "0";
                           const xml = xmlByNota.get(nfKey);
+                          const isGroup = (nfGroups.get(nfKey) || 0) > 1;
+                          let groupClass = "";
+                          if (isGroup) {
+                            if (!nfColorMap.has(nfKey)) { nfColorMap.set(nfKey, groupColors[colorIdx % groupColors.length]); colorIdx++; }
+                            groupClass = `border-l-4 ${nfColorMap.get(nfKey)}`;
+                          }
+                          const parcela = getParcelaLabel(boleto, xml);
                           return (
                           <Fragment key={boleto.id}>
                             <TableRow
-                              className="cursor-pointer hover:bg-muted/50"
+                              className={`cursor-pointer hover:bg-muted/50 ${groupClass}`}
                               onClick={() =>
                                 setExpandedBoleto(
                                   expandedBoleto === boleto.id ? null : boleto.id
@@ -2150,7 +2204,10 @@ function OperationEditor({ tabId }: { tabId: string }) {
                               <TableCell className="max-w-[200px] truncate text-sm" title={boleto.arquivo_renomeado || boleto.arquivo_original}>
                                 {boleto.arquivo_renomeado || boleto.arquivo_original}
                               </TableCell>
-                              <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">{boleto.numero_nota || "—"}</TableCell>
+                              <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
+                                {boleto.numero_nota || "—"}
+                                {parcela && <Badge variant="outline" className="ml-2 text-xs font-normal">Parcela {parcela}</Badge>}
+                              </TableCell>
                               <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
                                 {boleto.valor_formatado || "—"}
                               </TableCell>

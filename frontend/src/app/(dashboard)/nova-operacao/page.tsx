@@ -168,7 +168,21 @@ interface EnvioRecord {
   created_at: string;
 }
 
-type Step = "config" | "upload" | "resultado";
+interface PreviewEnvioGrupo {
+  email_para: string[];
+  email_cc: string[];
+  assunto: string;
+  boletos: BoletoCompleto[];
+  xmls: XmlResumo[];
+}
+
+interface PreviewEnvioResponse {
+  total_grupos: number;
+  total_aprovados: number;
+  grupos: PreviewEnvioGrupo[];
+}
+
+type Step = "config" | "upload" | "processamento" | "resultado";
 
 // -- Page (wrapper) --
 
@@ -298,6 +312,10 @@ function OperationEditor({ tabId }: { tabId: string }) {
   const [previewModal, setPreviewModal] = useState<{ url: string; title: string } | null>(null);
   const [previewBlobUrls, setPreviewBlobUrls] = useState<Record<string, string>>({});
 
+  // Processamento & envio preview state
+  const [envioPreview, setEnvioPreview] = useState<PreviewEnvioResponse | null>(null);
+  const [expandedEnvioGroup, setExpandedEnvioGroup] = useState<number | null>(null);
+
   // Load FIDCs
   useEffect(() => {
     apiFetch<Fidc[]>("/fidcs").then(setFidcs).catch(() => toast.error("Erro ao carregar FIDCs"));
@@ -330,7 +348,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
         setSavedNumero(op.numero);
         setOperacaoCreatedAt(op.created_at);
 
-        if (tab.step === "resultado" || op.status === "em_processamento" || op.status === "concluida") {
+        if (op.status === "em_processamento" || op.status === "concluida") {
           // Restore resultado from operation data
           setResultado({
             total: op.total_boletos,
@@ -339,10 +357,21 @@ function OperationEditor({ tabId }: { tabId: string }) {
             taxa_sucesso: op.taxa_sucesso,
             boletos: op.boletos,
           });
-          setStep("resultado");
+          // Carregar preview envio e historico
+          apiFetch<PreviewEnvioResponse>(`/operacoes/${op.id}/preview-envio`)
+            .then(setEnvioPreview)
+            .catch(() => {});
           apiFetch<EnvioRecord[]>(`/operacoes/${op.id}/envios`)
             .then(setEnvios)
             .catch(() => {});
+          // Determinar step
+          if (tab.step === "resultado" && op.status === "concluida") {
+            setStep("resultado");
+          } else {
+            setStep("processamento");
+          }
+        } else if (op.boletos.length > 0) {
+          setStep("upload");
         } else {
           setStep("upload");
         }
@@ -541,15 +570,27 @@ function OperationEditor({ tabId }: { tabId: string }) {
         { method: "POST" }
       );
       setResultado(result);
-      setStep("resultado");
-      syncTab({ step: "resultado" });
       toast.success(
         `Processamento concluido: ${result.aprovados} aprovados, ${result.rejeitados} rejeitados`
       );
+      // Carregar preview de envio apos processar
+      await fetchEnvioPreview();
     } catch {
-      toast.error("Erro ao processar operação");
+      toast.error("Erro ao processar operacao");
     } finally {
       setProcessing(false);
+    }
+  }
+
+  async function fetchEnvioPreview() {
+    if (!operacaoId) return;
+    try {
+      const data = await apiFetch<PreviewEnvioResponse>(
+        `/operacoes/${operacaoId}/preview-envio`
+      );
+      setEnvioPreview(data);
+    } catch {
+      // silently fail — preview is optional
     }
   }
 
@@ -806,13 +847,15 @@ function OperationEditor({ tabId }: { tabId: string }) {
         const steps: { key: Step; label: string }[] = [
           { key: "config", label: "Configurar" },
           { key: "upload", label: "Upload" },
+          { key: "processamento", label: "Processamento" },
           { key: "resultado", label: "Resultado" },
         ];
         const unlocked = !!operacaoId;
         const stepIdx = steps.findIndex((s) => s.key === step);
-        // Max reachable step based on actual progress
+        // Max reachable step: config(0) → upload(1) → processamento(2) → resultado(3)
+        const hasBoletos = uploadedBoletos.length > 0;
         const hasResultado = !!resultado;
-        const maxStepIdx = !unlocked ? 0 : !hasResultado ? 1 : steps.length - 1;
+        const maxStepIdx = !unlocked ? 0 : !hasBoletos ? 1 : !hasResultado ? 2 : steps.length - 1;
 
         return (
           <div className="flex items-center gap-3">
@@ -1345,29 +1388,303 @@ function OperationEditor({ tabId }: { tabId: string }) {
             </Button>
 
             {uploadedBoletos.length > 0 && !addingToExisting && (
-              <Button onClick={handleProcess} disabled={processing} className="gap-2">
-                {processing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Play className="h-4 w-4" />
-                )}
-                {processing ? "Processando..." : "Processar Operação"}
+              <Button
+                className="gap-2"
+                onClick={() => { setStep("processamento"); syncTab({ step: "processamento" }); }}
+              >
+                <Play className="h-4 w-4" />
+                Continuar para Processamento
               </Button>
             )}
 
             {addingToExisting && (
               <Button
                 variant="outline"
-                onClick={() => { setStep("resultado"); syncTab({ step: "resultado" }); }}
+                onClick={() => { setStep("processamento"); syncTab({ step: "processamento" }); }}
               >
-                Ver Resultado
+                Ver Processamento
               </Button>
             )}
           </div>
         </div>
       )}
 
-      {/* Step 3: Resultado */}
+      {/* Step 3: Processamento & Envio */}
+      {step === "processamento" && operacaoId && (
+        <div className="space-y-6">
+
+          {/* Processar button (antes de processar) */}
+          {!resultado && (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex flex-col items-center gap-4 py-8">
+                  <div className="rounded-full bg-primary/10 p-4">
+                    <Play className="h-8 w-8 text-primary" />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <h3 className="text-lg font-semibold">Pronto para Processar</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {uploadedBoletos.length} boleto(s) e {uploadedXmls.length} XML(s) serao validados com as 5 camadas de verificacao
+                    </p>
+                  </div>
+                  <Button onClick={handleProcess} disabled={processing} size="lg" className="gap-2">
+                    {processing ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Play className="h-5 w-5" />
+                    )}
+                    {processing ? "Processando..." : "Processar Operacao"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* KPIs resumo (apos processar) */}
+          {resultado && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-muted-foreground">Total Boletos</p>
+                    <p className="text-2xl font-bold font-[family-name:var(--font-barlow-condensed)]">{resultado.total}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-muted-foreground">Aprovados</p>
+                    <p className="text-2xl font-bold text-success font-[family-name:var(--font-barlow-condensed)]">{resultado.aprovados}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-muted-foreground">Rejeitados</p>
+                    <p className="text-2xl font-bold text-destructive font-[family-name:var(--font-barlow-condensed)]">{resultado.rejeitados}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-muted-foreground">Taxa de Sucesso</p>
+                    <p className="text-2xl font-bold font-[family-name:var(--font-barlow-condensed)]">{resultado.taxa_sucesso.toFixed(1)}%</p>
+                  </CardContent>
+                </Card>
+              </div>
+              {resultado.total > 0 && (
+                <Progress value={resultado.taxa_sucesso} className="h-2" />
+              )}
+            </>
+          )}
+
+          {/* Email Groups preview */}
+          {envioPreview && envioPreview.grupos.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Mail className="h-4 w-4" />
+                  Emails para Envio ({envioPreview.total_grupos})
+                </CardTitle>
+                <CardDescription>
+                  {envioPreview.total_aprovados} boleto(s) aprovado(s) agrupados em {envioPreview.total_grupos} email(s). Clique para ver os documentos anexados.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-8 px-2" />
+                        <TableHead>Destinatario</TableHead>
+                        <TableHead>Assunto</TableHead>
+                        <TableHead className="text-center">Boletos</TableHead>
+                        <TableHead className="text-center">Notas</TableHead>
+                        <TableHead className="text-center">Total Anexos</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {envioPreview.grupos.map((grupo, idx) => (
+                        <Fragment key={idx}>
+                          <TableRow
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => setExpandedEnvioGroup(expandedEnvioGroup === idx ? null : idx)}
+                          >
+                            <TableCell className="w-8 px-2">
+                              {expandedEnvioGroup === idx
+                                ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                            </TableCell>
+                            <TableCell className="max-w-[250px]">
+                              <div className="flex flex-col gap-0.5">
+                                {grupo.email_para.map((e) => (
+                                  <span key={e} className="text-sm">{e}</span>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell className="max-w-[250px] truncate text-sm" title={grupo.assunto}>
+                              {grupo.assunto}
+                            </TableCell>
+                            <TableCell className="text-center font-[family-name:var(--font-barlow-condensed)] font-semibold">
+                              {grupo.boletos.length}
+                            </TableCell>
+                            <TableCell className="text-center font-[family-name:var(--font-barlow-condensed)] font-semibold">
+                              {grupo.xmls.length}
+                            </TableCell>
+                            <TableCell className="text-center font-[family-name:var(--font-barlow-condensed)] font-semibold">
+                              {grupo.boletos.length + grupo.xmls.length}
+                            </TableCell>
+                          </TableRow>
+                          {expandedEnvioGroup === idx && (
+                            <TableRow>
+                              <TableCell colSpan={6} className="p-0">
+                                <div className="bg-muted/30 p-4 space-y-4">
+                                  {/* CC */}
+                                  {grupo.email_cc.length > 0 && (
+                                    <p className="text-xs text-muted-foreground">CC: {grupo.email_cc.join(", ")}</p>
+                                  )}
+
+                                  {/* Boletos do grupo */}
+                                  {grupo.boletos.length > 0 && (
+                                    <div>
+                                      <p className="text-sm font-medium mb-2">Boletos ({grupo.boletos.length})</p>
+                                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                        {grupo.boletos.map((boleto) => {
+                                          const blobKey = `boleto-${boleto.id}`;
+                                          const blobUrl = previewBlobUrls[blobKey];
+                                          if (!blobUrl && operacaoId) {
+                                            loadPreview(`/operacoes/${operacaoId}/boletos/${boleto.id}/arquivo`, blobKey);
+                                          }
+                                          return (
+                                            <div
+                                              key={boleto.id}
+                                              className="border rounded-lg overflow-hidden bg-white cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                                              onClick={() => {
+                                                if (blobUrl) setPreviewModal({ url: blobUrl, title: boleto.arquivo_renomeado || boleto.arquivo_original });
+                                              }}
+                                            >
+                                              {blobUrl ? (
+                                                <iframe src={blobUrl} className="w-full h-32 pointer-events-none" title={boleto.arquivo_original} />
+                                              ) : (
+                                                <div className="w-full h-32 flex items-center justify-center bg-muted/50">
+                                                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                                </div>
+                                              )}
+                                              <div className="p-2 border-t space-y-0.5">
+                                                <p className="text-xs font-medium truncate" title={boleto.arquivo_renomeado || boleto.arquivo_original}>
+                                                  {boleto.arquivo_renomeado || boleto.arquivo_original}
+                                                </p>
+                                                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                                  <span>{boleto.vencimento || "—"}</span>
+                                                  <span className="font-[family-name:var(--font-barlow-condensed)] font-semibold">{boleto.valor_formatado || "—"}</span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* XMLs/NFs do grupo */}
+                                  {grupo.xmls.length > 0 && (
+                                    <div>
+                                      <p className="text-sm font-medium mb-2">Notas Fiscais ({grupo.xmls.length})</p>
+                                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                        {grupo.xmls.map((xml) => {
+                                          const blobKey = `xml-${xml.id}`;
+                                          const blobUrl = previewBlobUrls[blobKey];
+                                          if (!blobUrl && operacaoId) {
+                                            loadPreview(`/operacoes/${operacaoId}/xmls/${xml.id}/arquivo`, blobKey);
+                                          }
+                                          return (
+                                            <div
+                                              key={xml.id}
+                                              className="border rounded-lg overflow-hidden bg-white cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                                              onClick={() => {
+                                                if (blobUrl) setPreviewModal({ url: blobUrl, title: xml.nome_arquivo });
+                                              }}
+                                            >
+                                              {blobUrl ? (
+                                                <iframe src={blobUrl} className="w-full h-32 pointer-events-none" title={xml.nome_arquivo} />
+                                              ) : (
+                                                <div className="w-full h-32 flex items-center justify-center bg-muted/50">
+                                                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                                </div>
+                                              )}
+                                              <div className="p-2 border-t space-y-0.5">
+                                                <p className="text-xs font-medium truncate" title={xml.nome_arquivo}>
+                                                  NF {xml.numero_nota}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground truncate">
+                                                  {xml.nome_destinatario || "—"}
+                                                </p>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Controles de envio */}
+          {resultado && resultado.aprovados > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Enviar Boletos por Email</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-medium">Modo:</span>
+                  <div className="flex rounded-lg border overflow-hidden">
+                    <button type="button" className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${envioMode === "preview" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`} onClick={() => setEnvioMode("preview")}>
+                      <Eye className="h-4 w-4" /> Preview (Rascunho)
+                    </button>
+                    <button type="button" className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${envioMode === "automatico" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`} onClick={() => setEnvioMode("automatico")}>
+                      <Send className="h-4 w-4" /> Automatico
+                    </button>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {envioMode === "preview" ? "Os emails serao criados como rascunhos no Outlook." : "Os emails serao enviados diretamente pelo Outlook."}
+                </p>
+                <div className="flex items-center gap-3">
+                  <Button onClick={() => { if (envioMode === "automatico") { setConfirmEnvioAuto(true); } else { handleEnviar(); } }} disabled={envioLoading} className="gap-2">
+                    {envioLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : envioMode === "preview" ? <Eye className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                    {envioLoading ? "Enviando..." : envioMode === "preview" ? "Criar Rascunhos" : "Enviar Emails"}
+                  </Button>
+                  <span className="text-sm text-muted-foreground">{resultado.aprovados} boleto(s) aprovado(s) para envio</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Botao para ver resultado detalhado */}
+          {resultado && (
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => { setStep("resultado"); syncTab({ step: "resultado" }); }}
+              >
+                <TrendingUp className="h-4 w-4" />
+                Ver Resultado Detalhado
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Step 4: Resultado */}
       {step === "resultado" && operacaoId && resultado && (
         <div className="space-y-6">
           {/* Action bar: date + buttons */}
@@ -1624,39 +1941,8 @@ function OperationEditor({ tabId }: { tabId: string }) {
               </Card>
             </TabsContent>
 
-            {/* Envio tab */}
+            {/* Envio tab — historico only */}
             <TabsContent value="envio" className="mt-4 space-y-4">
-              {resultado.aprovados > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Enviar Boletos por Email</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm font-medium">Modo:</span>
-                      <div className="flex rounded-lg border overflow-hidden">
-                        <button type="button" className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${envioMode === "preview" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`} onClick={() => setEnvioMode("preview")}>
-                          <Eye className="h-4 w-4" /> Preview (Rascunho)
-                        </button>
-                        <button type="button" className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${envioMode === "automatico" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`} onClick={() => setEnvioMode("automatico")}>
-                          <Send className="h-4 w-4" /> Automatico
-                        </button>
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {envioMode === "preview" ? "Os emails serao criados como rascunhos no Outlook." : "Os emails serao enviados diretamente pelo Outlook."}
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <Button onClick={() => { if (envioMode === "automatico") { setConfirmEnvioAuto(true); } else { handleEnviar(); } }} disabled={envioLoading} className="gap-2">
-                        {envioLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : envioMode === "preview" ? <Eye className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-                        {envioLoading ? "Enviando..." : envioMode === "preview" ? "Criar Rascunhos" : "Enviar Emails"}
-                      </Button>
-                      <span className="text-sm text-muted-foreground">{resultado.aprovados} boleto(s) aprovado(s) para envio</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
               {/* Historico de envios */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">

@@ -193,6 +193,23 @@ class EnvioStatusUpdate(BaseModel):
     status: str  # "enviado"
 
 
+# ── Preview envio schemas ────────────────────────────────────
+
+
+class PreviewEnvioGrupo(BaseModel):
+    email_para: list[str]
+    email_cc: list[str]
+    assunto: str
+    boletos: list[BoletoCompleto]
+    xmls: list[XmlResumo]
+
+
+class PreviewEnvioResponse(BaseModel):
+    total_grupos: int
+    total_aprovados: int
+    grupos: list[PreviewEnvioGrupo]
+
+
 class VerificarStatusItem(BaseModel):
     envio_id: uuid.UUID
     assunto: str

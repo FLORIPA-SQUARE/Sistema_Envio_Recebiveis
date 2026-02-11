@@ -20,6 +20,7 @@ Endpoints:
   PATCH  /operacoes/{id}/xmls/{xml_id}/emails    — Editar emails de um XML
   PATCH  /operacoes/{id}/envios/{eid}/status     — Marcar envio como enviado manualmente
   GET    /operacoes/{id}/relatorio       — Download de relatorio (TXT/JSON)
+  GET    /operacoes/{id}/preview-envio            — Preview agrupamento de emails
   GET    /operacoes/{id}/boletos/{bid}/arquivo   — Download/preview arquivo boleto PDF
   GET    /operacoes/{id}/xmls/{xid}/arquivo      — Download/preview arquivo XML
 """
@@ -67,6 +68,8 @@ from app.schemas.operacao import (
     OperacaoFinalizada,
     OperacaoResponse,
     OperacoesPaginadas,
+    PreviewEnvioGrupo,
+    PreviewEnvioResponse,
     ResultadoProcessamento,
     UploadBoletosResponse,
     UploadXmlsResponse,
@@ -382,6 +385,71 @@ async def download_xml_arquivo(
         path=str(file_path),
         media_type=media_type,
         filename=xml.nome_arquivo,
+    )
+
+
+# ── GET /operacoes/{op_id}/preview-envio ────────────────────
+
+
+@router.get("/{op_id}/preview-envio", response_model=PreviewEnvioResponse)
+async def preview_envio(
+    op_id: str,
+    db: AsyncSession = Depends(get_db),
+    _current_user: Usuario = Depends(get_current_user),
+):
+    """Retorna agrupamento de emails para preview, sem enviar."""
+    op = await _get_operacao(op_id, db)
+    fidc = await _get_fidc(op.fidc_id, db)
+
+    # Buscar boletos aprovados
+    boletos_result = await db.execute(
+        select(Boleto)
+        .where(Boleto.operacao_id == op.id)
+        .where(Boleto.status == "aprovado")
+    )
+    boletos_aprovados = boletos_result.scalars().all()
+
+    if not boletos_aprovados:
+        return PreviewEnvioResponse(total_grupos=0, total_aprovados=0, grupos=[])
+
+    # Buscar XMLs
+    xmls_result = await db.execute(
+        select(XmlNfe).where(XmlNfe.operacao_id == op.id)
+    )
+    xmls = xmls_result.scalars().all()
+
+    # Agrupar por email destino
+    storage_base = _storage_path() / "uploads" / str(op.id)
+    grupos = agrupar_boletos_para_envio(boletos_aprovados, xmls, fidc, storage_base)
+
+    # Mapas para lookup rapido
+    boletos_map = {str(b.id): b for b in boletos_aprovados}
+    xmls_map = {str(x.id): x for x in xmls}
+
+    preview_grupos = []
+    for grupo in grupos:
+        grupo_boletos = [
+            BoletoCompleto.model_validate(boletos_map[bid])
+            for bid in grupo.boletos_ids
+            if bid in boletos_map
+        ]
+        grupo_xmls = [
+            XmlResumo.model_validate(xmls_map[xid])
+            for xid in grupo.xmls_ids
+            if xid in xmls_map
+        ]
+        preview_grupos.append(PreviewEnvioGrupo(
+            email_para=grupo.email_para,
+            email_cc=grupo.email_cc,
+            assunto=grupo.assunto,
+            boletos=grupo_boletos,
+            xmls=grupo_xmls,
+        ))
+
+    return PreviewEnvioResponse(
+        total_grupos=len(preview_grupos),
+        total_aprovados=len(boletos_aprovados),
+        grupos=preview_grupos,
     )
 
 

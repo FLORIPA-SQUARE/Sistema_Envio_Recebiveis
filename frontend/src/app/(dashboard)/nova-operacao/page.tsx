@@ -1097,12 +1097,12 @@ function OperationEditor({ tabId }: { tabId: string }) {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-8 px-2" />
+                      <TableHead>Arquivo</TableHead>
                       <TableHead>NF</TableHead>
+                      <TableHead className="text-right">Valor</TableHead>
                       <TableHead>Destinatário</TableHead>
                       <TableHead>CNPJ</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
                       <TableHead>Emails</TableHead>
-                      <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1123,17 +1123,20 @@ function OperationEditor({ tabId }: { tabId: string }) {
                               ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
                               : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                           </TableCell>
+                          <TableCell className="max-w-[200px] truncate text-sm" title={xml.nome_arquivo}>
+                            {xml.nome_arquivo}
+                          </TableCell>
                           <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
                             {xml.numero_nota}
-                          </TableCell>
-                          <TableCell>{xml.nome_destinatario || "—"}</TableCell>
-                          <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
-                            {xml.cnpj || "—"}
                           </TableCell>
                           <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
                             {xml.valor_total
                               ? `R$ ${xml.valor_total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
                               : "—"}
+                          </TableCell>
+                          <TableCell>{xml.nome_destinatario || "—"}</TableCell>
+                          <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
+                            {xml.cnpj || "—"}
                           </TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             {editingXmlId === xml.id ? (
@@ -1220,13 +1223,6 @@ function OperationEditor({ tabId }: { tabId: string }) {
                               </div>
                             )}
                           </TableCell>
-                          <TableCell>
-                            {xml.xml_valido ? (
-                              <Badge className="bg-success text-success-foreground">Válido</Badge>
-                            ) : (
-                              <Badge variant="destructive">Inválido</Badge>
-                            )}
-                          </TableCell>
                         </TableRow>
                         {expandedUploadXml === xml.id && (
                           <TableRow>
@@ -1287,9 +1283,9 @@ function OperationEditor({ tabId }: { tabId: string }) {
                         <TableHead className="w-8 px-2" />
                         <TableHead>Arquivo</TableHead>
                         <TableHead>NF</TableHead>
-                        <TableHead>Pagador</TableHead>
-                        <TableHead>Vencimento</TableHead>
                         <TableHead className="text-right">Valor</TableHead>
+                        <TableHead>Vencimento</TableHead>
+                        <TableHead>Destinatário</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1319,14 +1315,14 @@ function OperationEditor({ tabId }: { tabId: string }) {
                               <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
                                 {nf.numero_nota || "—"}
                               </TableCell>
-                              <TableCell className="max-w-[180px] truncate">
-                                {boleto?.pagador || "—"}
+                              <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
+                                {boleto?.valor_formatado || "—"}
                               </TableCell>
                               <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
                                 {boleto?.vencimento || "—"}
                               </TableCell>
-                              <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
-                                {boleto?.valor_formatado || "—"}
+                              <TableCell className="max-w-[180px] truncate">
+                                {boleto?.pagador || "—"}
                               </TableCell>
                             </TableRow>
                             {expandedUploadNf === nf.id && (
@@ -1391,10 +1387,9 @@ function OperationEditor({ tabId }: { tabId: string }) {
                       <TableRow>
                         <TableHead className="w-8 px-2" />
                         <TableHead>Arquivo</TableHead>
-                        <TableHead>Pagador</TableHead>
                         <TableHead>NF</TableHead>
-                        <TableHead>Vencimento</TableHead>
                         <TableHead className="text-right">Valor</TableHead>
+                        <TableHead>Vencimento</TableHead>
                         <TableHead>Destinatario</TableHead>
                         <TableHead>Email</TableHead>
                       </TableRow>
@@ -1423,15 +1418,14 @@ function OperationEditor({ tabId }: { tabId: string }) {
                               <TableCell className="max-w-[200px] truncate text-sm" title={boleto.arquivo_renomeado || boleto.arquivo_original}>
                                 {boleto.arquivo_renomeado || boleto.arquivo_original}
                               </TableCell>
-                              <TableCell className="max-w-[180px] truncate">{boleto.pagador || "—"}</TableCell>
                               <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
                                 {boleto.numero_nota || "—"}
                               </TableCell>
-                              <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
-                                {boleto.vencimento || "—"}
-                              </TableCell>
                               <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
                                 {boleto.valor_formatado || "—"}
+                              </TableCell>
+                              <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
+                                {boleto.vencimento || "—"}
                               </TableCell>
                               <TableCell className="max-w-[180px] truncate">
                                 {xml?.nome_destinatario || "—"}
@@ -1442,7 +1436,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                             </TableRow>
                             {expandedUploadBoleto === boleto.id && (
                               <TableRow>
-                                <TableCell colSpan={8} className="p-0">
+                                <TableCell colSpan={7} className="p-0">
                                   <div className="bg-muted/30 p-4">
                                     {previewBlobUrls[`boleto-${boleto.id}`] ? (
                                       <div className="space-y-2">
@@ -2105,9 +2099,9 @@ function OperationEditor({ tabId }: { tabId: string }) {
                             <TableHead className="w-8 px-2" />
                             <TableHead>Arquivo</TableHead>
                             <TableHead>NF</TableHead>
-                            <TableHead>Pagador</TableHead>
-                            <TableHead>Vencimento</TableHead>
                             <TableHead className="text-right">Valor</TableHead>
+                            <TableHead>Vencimento</TableHead>
+                            <TableHead>Destinatário</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -2137,14 +2131,14 @@ function OperationEditor({ tabId }: { tabId: string }) {
                                   <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
                                     {nf.numero_nota || "—"}
                                   </TableCell>
-                                  <TableCell className="max-w-[180px] truncate">
-                                    {boleto?.pagador || "—"}
+                                  <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
+                                    {boleto?.valor_formatado || "—"}
                                   </TableCell>
                                   <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
                                     {boleto?.vencimento || "—"}
                                   </TableCell>
-                                  <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
-                                    {boleto?.valor_formatado || "—"}
+                                  <TableCell className="max-w-[180px] truncate">
+                                    {boleto?.pagador || "—"}
                                   </TableCell>
                                 </TableRow>
                                 {expandedUploadNf === nf.id && (

@@ -10,12 +10,16 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.services.email_grouper import EmailGroup
 
 logger = logging.getLogger(__name__)
+
+ASSETS_DIR = Path(__file__).parent.parent / "assets"
+ASSINATURA_PATH = ASSETS_DIR / "assinatura.jpg"
 
 # Constantes COM do Outlook
 OL_MAIL_ITEM = 0  # olMailItem
@@ -66,6 +70,14 @@ class OutlookMailer:
         # Anexar Notas Fiscais em PDF
         for xml_path in group.anexos_xml:
             mail.Attachments.Add(str(xml_path))
+
+        # Assinatura JotaJota inline (CID embedding)
+        if ASSINATURA_PATH.exists():
+            att = mail.Attachments.Add(str(ASSINATURA_PATH))
+            att.PropertyAccessor.SetProperty(
+                "http://schemas.microsoft.com/mapi/proptag/0x3712001F",
+                "assinatura_jj",
+            )
 
         return mail
 

@@ -62,6 +62,7 @@ Favor confirmar recebimento.</p>
 
 <p>Atenciosamente,<br>
 <strong>Equipe de Cobranca</strong></p>
+<img src="cid:assinatura_jj" alt="JotaJota - Eletrica, Hidraulica, Iluminacao" style="max-width: 500px; height: auto;" />
 </body>
 </html>"""
 

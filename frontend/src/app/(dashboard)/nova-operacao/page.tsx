@@ -315,6 +315,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
   // Processamento & envio preview state
   const [envioPreview, setEnvioPreview] = useState<PreviewEnvioResponse | null>(null);
   const [expandedEnvioGroup, setExpandedEnvioGroup] = useState<number | null>(null);
+  const [expandedUploadNf, setExpandedUploadNf] = useState<string | null>(null);
 
   // Load FIDCs
   useEffect(() => {
@@ -1084,11 +1085,11 @@ function OperationEditor({ tabId }: { tabId: string }) {
             </TabsContent>
           </Tabs>
 
-          {/* Uploaded XMLs preview table */}
-          {uploadedXmls.length > 0 && (
+          {/* Uploaded XMLs preview table (only .xml files) */}
+          {uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">XMLs Parseados</CardTitle>
+                <CardTitle className="text-base">XMLs Parseados ({uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).length})</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
@@ -1105,7 +1106,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {uploadedXmls.map((xml) => (
+                    {uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).map((xml) => (
                       <Fragment key={xml.id}>
                         <TableRow
                           className="cursor-pointer hover:bg-muted/50"
@@ -1266,6 +1267,112 @@ function OperationEditor({ tabId }: { tabId: string }) {
               </CardContent>
             </Card>
           )}
+
+          {/* Uploaded NF PDFs preview table */}
+          {uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".pdf")).length > 0 && (() => {
+            const nfPdfs = uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".pdf"));
+            const boletaByNota = new Map(
+              uploadedBoletos.map((b) => [(b.numero_nota || "").replace(/^0+/, "") || "0", b])
+            );
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Notas Fiscais ({nfPdfs.length})</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-8 px-2" />
+                        <TableHead>Arquivo</TableHead>
+                        <TableHead>NF</TableHead>
+                        <TableHead>Pagador</TableHead>
+                        <TableHead>Vencimento</TableHead>
+                        <TableHead className="text-right">Valor</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {nfPdfs.map((nf) => {
+                        const nfKey = (nf.numero_nota || "").replace(/^0+/, "") || "0";
+                        const boleto = boletaByNota.get(nfKey);
+                        return (
+                          <Fragment key={nf.id}>
+                            <TableRow
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => {
+                                const isExpanding = expandedUploadNf !== nf.id;
+                                setExpandedUploadNf(isExpanding ? nf.id : null);
+                                if (isExpanding && operacaoId) {
+                                  loadPreview(`/operacoes/${operacaoId}/xmls/${nf.id}/arquivo`, `xml-${nf.id}`);
+                                }
+                              }}
+                            >
+                              <TableCell className="w-8 px-2">
+                                {expandedUploadNf === nf.id
+                                  ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                  : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                              </TableCell>
+                              <TableCell className="max-w-[250px] truncate text-sm" title={nf.nome_arquivo}>
+                                {nf.nome_arquivo}
+                              </TableCell>
+                              <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
+                                {nf.numero_nota || "—"}
+                              </TableCell>
+                              <TableCell className="max-w-[180px] truncate">
+                                {boleto?.pagador || "—"}
+                              </TableCell>
+                              <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
+                                {boleto?.vencimento || "—"}
+                              </TableCell>
+                              <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
+                                {boleto?.valor_formatado || "—"}
+                              </TableCell>
+                            </TableRow>
+                            {expandedUploadNf === nf.id && (
+                              <TableRow>
+                                <TableCell colSpan={6} className="p-0">
+                                  <div className="bg-muted/30 p-4">
+                                    {previewBlobUrls[`xml-${nf.id}`] ? (
+                                      <div className="space-y-2">
+                                        <iframe
+                                          src={previewBlobUrls[`xml-${nf.id}`]}
+                                          className="w-full h-64 rounded border bg-white"
+                                          title={nf.nome_arquivo}
+                                        />
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="gap-2"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setPreviewModal({ url: previewBlobUrls[`xml-${nf.id}`], title: nf.nome_arquivo });
+                                          }}
+                                        >
+                                          <Maximize2 className="h-3.5 w-3.5" />
+                                          Ampliar
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center justify-center h-32 text-muted-foreground">
+                                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                                        Carregando preview...
+                                      </div>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Uploaded Boletos preview table */}
           {uploadedBoletos.length > 0 && (() => {

@@ -429,6 +429,13 @@ async def preview_envio(
     boletos_map = {str(b.id): b for b in boletos_aprovados}
     xmls_map = {str(x.id): x for x in xmls}
 
+    # Mapa de NF PDFs por numero_nota (para mostrar PDF em vez de XML no preview)
+    nf_pdfs_by_nota: dict[str, XmlNfe] = {}
+    for x in xmls:
+        if x.nome_arquivo.lower().endswith(".pdf"):
+            nf_key = (x.numero_nota or "").lstrip("0") or "0"
+            nf_pdfs_by_nota[nf_key] = x
+
     preview_grupos = []
     for grupo in grupos:
         grupo_boletos = [
@@ -436,11 +443,22 @@ async def preview_envio(
             for bid in grupo.boletos_ids
             if bid in boletos_map
         ]
-        grupo_xmls = [
-            XmlResumo.model_validate(xmls_map[xid])
-            for xid in grupo.xmls_ids
-            if xid in xmls_map
-        ]
+        # Substituir XMLs por NF PDFs quando disponivel
+        grupo_xmls = []
+        seen_notas = set()
+        for xid in grupo.xmls_ids:
+            xml_rec = xmls_map.get(xid)
+            if not xml_rec:
+                continue
+            nf_key = (xml_rec.numero_nota or "").lstrip("0") or "0"
+            if nf_key in seen_notas:
+                continue
+            seen_notas.add(nf_key)
+            pdf_rec = nf_pdfs_by_nota.get(nf_key)
+            if pdf_rec:
+                grupo_xmls.append(XmlResumo.model_validate(pdf_rec))
+            else:
+                grupo_xmls.append(XmlResumo.model_validate(xml_rec))
         preview_grupos.append(PreviewEnvioGrupo(
             email_para=grupo.email_para,
             email_cc=grupo.email_cc,
@@ -655,20 +673,35 @@ async def upload_xmls(
             raw = stem.split("-")[-1] if "-" in stem else stem
             numero_nota = raw.lstrip("0") or "0"
 
-            # Pular se ja existe um registro com mesmo numero_nota (ex: XML ja uploadado)
+            # Se ja existe XML com mesmo numero_nota, copiar dados para enriquecer o PDF
+            enriched: dict = {}
             if numero_nota in existing_notas_set:
-                logger.info("DEDUP: PDF %s (NF %s) pulado — ja existe no set %s", file.filename, numero_nota, existing_notas_set)
-                continue
+                existing_xml = await db.execute(
+                    select(XmlNfe).where(
+                        XmlNfe.operacao_id == op.id,
+                        XmlNfe.numero_nota == numero_nota,
+                        XmlNfe.nome_arquivo.ilike("%.xml"),
+                    )
+                )
+                xml_src = existing_xml.scalars().first()
+                if xml_src:
+                    enriched = {
+                        "cnpj": xml_src.cnpj,
+                        "nome_destinatario": xml_src.nome_destinatario,
+                        "valor_total": xml_src.valor_total,
+                        "emails": xml_src.emails or [],
+                        "emails_invalidos": xml_src.emails_invalidos or [],
+                    }
 
             xml_record = XmlNfe(
                 operacao_id=op.id,
                 nome_arquivo=file.filename,
                 numero_nota=numero_nota,
-                cnpj=None,
-                nome_destinatario=None,
-                valor_total=None,
-                emails=[],
-                emails_invalidos=[],
+                cnpj=enriched.get("cnpj"),
+                nome_destinatario=enriched.get("nome_destinatario"),
+                valor_total=enriched.get("valor_total"),
+                emails=enriched.get("emails", []),
+                emails_invalidos=enriched.get("emails_invalidos", []),
                 duplicatas=[],
                 xml_valido=True,
                 dados_raw={},
@@ -739,6 +772,9 @@ async def processar_operacao(
     mapa_xmls: dict[str, tuple[XmlNfe, DadosXmlNfe]] = {}
     for xml_record in xmls:
         nf = xml_record.numero_nota.lstrip("0")
+        # Priorizar XMLs sobre PDFs (PDFs de NF sao apenas para exibicao)
+        if nf in mapa_xmls and xml_record.nome_arquivo.lower().endswith(".pdf"):
+            continue
         dados_xml = DadosXmlNfe(
             xml_valido=xml_record.xml_valido,
             numero_nota=xml_record.numero_nota,
@@ -896,6 +932,9 @@ async def reprocessar_operacao(
     mapa_xmls: dict[str, tuple[XmlNfe, DadosXmlNfe]] = {}
     for xml_record in xmls:
         nf = xml_record.numero_nota.lstrip("0")
+        # Priorizar XMLs sobre PDFs (PDFs de NF sao apenas para exibicao)
+        if nf in mapa_xmls and xml_record.nome_arquivo.lower().endswith(".pdf"):
+            continue
         dados_xml = DadosXmlNfe(
             xml_valido=xml_record.xml_valido,
             numero_nota=xml_record.numero_nota,

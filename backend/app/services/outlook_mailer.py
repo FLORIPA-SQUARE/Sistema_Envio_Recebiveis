@@ -63,7 +63,7 @@ class OutlookMailer:
         for pdf_path in group.anexos_pdf:
             mail.Attachments.Add(str(pdf_path))
 
-        # Anexar XMLs (notas fiscais)
+        # Anexar Notas Fiscais em PDF
         for xml_path in group.anexos_xml:
             mail.Attachments.Add(str(xml_path))
 

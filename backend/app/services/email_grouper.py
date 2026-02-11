@@ -50,6 +50,13 @@ def agrupar_boletos_para_envio(
     # Mapa de XMLs por ID
     xmls_map = {str(x.id): x for x in xmls}
 
+    # Mapa de NF PDFs por numero_nota normalizado (para anexar ao email)
+    nf_pdfs_by_nota: dict[str, object] = {}
+    for x in xmls:
+        if x.nome_arquivo.lower().endswith(".pdf"):
+            nf_key = (x.numero_nota or "").lstrip("0") or "0"
+            nf_pdfs_by_nota[nf_key] = x
+
     # Agrupar boletos por chave de email (tupla ordenada dos emails destino)
     grupos: dict[tuple[str, ...], list] = {}
 
@@ -114,19 +121,17 @@ def agrupar_boletos_para_envio(
                 if pdf_path.exists():
                     anexos_pdf.append(pdf_path)
 
-            # Nota fiscal correspondente (prioriza PDF sobre XML)
+            # Nota fiscal em PDF correspondente (XML nunca e anexado — serve apenas para dados)
             if xml and str(xml.id) not in xmls_ids_set:
                 xmls_ids_set.add(str(xml.id))
                 xmls_nomes.append(xml.nome_arquivo)
                 nf_dir = storage_base / "xmls"
-                nf_stem = Path(xml.nome_arquivo).stem
-                # Priorizar PDF da NF sobre XML
-                nf_pdf = nf_dir / f"{nf_stem}.pdf"
-                nf_xml = nf_dir / xml.nome_arquivo
-                if nf_pdf.exists():
-                    anexos_xml_set[str(xml.id)] = nf_pdf
-                elif nf_xml.exists():
-                    anexos_xml_set[str(xml.id)] = nf_xml
+                nf_key = (xml.numero_nota or "").lstrip("0") or "0"
+                nf_pdf_record = nf_pdfs_by_nota.get(nf_key)
+                if nf_pdf_record:
+                    nf_pdf_path = nf_dir / nf_pdf_record.nome_arquivo
+                    if nf_pdf_path.exists():
+                        anexos_xml_set[str(xml.id)] = nf_pdf_path
 
             # Nome do cliente (usar do XML se disponivel)
             if not nome_cliente:

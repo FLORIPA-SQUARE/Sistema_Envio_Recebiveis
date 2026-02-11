@@ -1548,39 +1548,76 @@ function OperationEditor({ tabId }: { tabId: string }) {
           )}
 
           {/* KPIs resumo (apos processar) */}
-          {resultado && (
-            <>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Card>
-                  <CardContent className="pt-6">
-                    <p className="text-sm text-muted-foreground">Total Boletos</p>
-                    <p className="text-2xl font-bold font-[family-name:var(--font-barlow-condensed)]">{resultado.total}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-6">
-                    <p className="text-sm text-muted-foreground">Aprovados</p>
-                    <p className="text-2xl font-bold text-success font-[family-name:var(--font-barlow-condensed)]">{resultado.aprovados}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-6">
-                    <p className="text-sm text-muted-foreground">Rejeitados</p>
-                    <p className="text-2xl font-bold text-destructive font-[family-name:var(--font-barlow-condensed)]">{resultado.rejeitados}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-6">
-                    <p className="text-sm text-muted-foreground">Taxa de Sucesso</p>
-                    <p className="text-2xl font-bold font-[family-name:var(--font-barlow-condensed)]">{resultado.taxa_sucesso.toFixed(1)}%</p>
-                  </CardContent>
-                </Card>
-              </div>
-              {resultado.total > 0 && (
-                <Progress value={resultado.taxa_sucesso} className="h-2" />
-              )}
-            </>
-          )}
+          {resultado && (() => {
+            const valorTotal = resultado.boletos.reduce((acc, b) => {
+              const raw = (b.valor_formatado || "").replace(/[^\d.,]/g, "").replace(".", "").replace(",", ".");
+              return acc + (parseFloat(raw) || 0);
+            }, 0);
+            const qtdBoletos = uploadedBoletos.length;
+            const qtdNfPdfs = uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".pdf")).length;
+            const qtdXmls = uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).length;
+            return (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <Card>
+                    <CardContent className="pt-6">
+                      <p className="text-sm text-muted-foreground">Valor Total</p>
+                      <p className="text-2xl font-bold font-[family-name:var(--font-barlow-condensed)]">
+                        R$ {valorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <p className="text-sm text-muted-foreground">Boletos</p>
+                      <p className="text-2xl font-bold font-[family-name:var(--font-barlow-condensed)]">{qtdBoletos}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <p className="text-sm text-muted-foreground">Notas Fiscais</p>
+                      <p className="text-2xl font-bold font-[family-name:var(--font-barlow-condensed)]">{qtdNfPdfs}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <p className="text-sm text-muted-foreground">XMLs</p>
+                      <p className="text-2xl font-bold font-[family-name:var(--font-barlow-condensed)]">{qtdXmls}</p>
+                    </CardContent>
+                  </Card>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <Card>
+                    <CardContent className="pt-6">
+                      <p className="text-sm text-muted-foreground">Total Processados</p>
+                      <p className="text-2xl font-bold font-[family-name:var(--font-barlow-condensed)]">{resultado.total}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <p className="text-sm text-muted-foreground">Aprovados</p>
+                      <p className="text-2xl font-bold text-success font-[family-name:var(--font-barlow-condensed)]">{resultado.aprovados}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <p className="text-sm text-muted-foreground">Rejeitados</p>
+                      <p className="text-2xl font-bold text-destructive font-[family-name:var(--font-barlow-condensed)]">{resultado.rejeitados}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <p className="text-sm text-muted-foreground">Taxa de Sucesso</p>
+                      <p className="text-2xl font-bold font-[family-name:var(--font-barlow-condensed)]">{resultado.taxa_sucesso.toFixed(1)}%</p>
+                    </CardContent>
+                  </Card>
+                </div>
+                {resultado.total > 0 && (
+                  <Progress value={resultado.taxa_sucesso} className="h-2" />
+                )}
+              </>
+            );
+          })()}
 
           {/* Email Groups preview */}
           {envioPreview && envioPreview.grupos.length > 0 && (

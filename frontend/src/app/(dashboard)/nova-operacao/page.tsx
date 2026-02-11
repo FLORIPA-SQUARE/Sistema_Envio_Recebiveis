@@ -103,8 +103,10 @@ interface BoletoCompleto {
   arquivo_original: string;
   arquivo_renomeado: string | null;
   pagador: string | null;
+  cnpj: string | null;
   numero_nota: string | null;
   vencimento: string | null;
+  valor: number | null;
   valor_formatado: string | null;
   status: string;
   motivo_rejeicao: string | null;
@@ -827,6 +829,89 @@ function OperationEditor({ tabId }: { tabId: string }) {
     );
   }
 
+  function ConfrontoBoletoNF({ boleto, xml }: { boleto: BoletoCompleto; xml: XmlResumo | null }) {
+    if (!xml) {
+      return <p className="text-sm text-muted-foreground py-2">Nenhuma nota fiscal vinculada a este boleto</p>;
+    }
+
+    type MatchStatus = "ok" | "divergente" | "parcial" | "n/a";
+    const rows: { campo: string; bolVal: string; nfVal: string; match: MatchStatus }[] = [];
+
+    // Numero NF
+    const bNf = (boleto.numero_nota || "").replace(/^0+/, "") || "";
+    const xNf = (xml.numero_nota || "").replace(/^0+/, "") || "";
+    rows.push({ campo: "Numero NF", bolVal: boleto.numero_nota || "—", nfVal: xml.numero_nota || "—", match: bNf && xNf ? (bNf === xNf ? "ok" : "divergente") : "n/a" });
+
+    // Valor
+    const bVal = boleto.valor;
+    const xVal = xml.valor_total;
+    rows.push({
+      campo: "Valor",
+      bolVal: boleto.valor_formatado || "—",
+      nfVal: xVal != null ? `R$ ${xVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—",
+      match: bVal != null && xVal != null ? (Math.abs(bVal - xVal) < 0.01 ? "ok" : "divergente") : "n/a",
+    });
+
+    // Nome
+    const bNome = (boleto.pagador || "").toUpperCase().trim();
+    const xNome = (xml.nome_destinatario || "").toUpperCase().trim();
+    let nomeMatch: MatchStatus = "n/a";
+    if (bNome && xNome) {
+      if (bNome === xNome) nomeMatch = "ok";
+      else if (bNome.includes(xNome) || xNome.includes(bNome)) nomeMatch = "parcial";
+      else {
+        const bWords = new Set(bNome.split(/\s+/).filter(w => w.length > 2));
+        const xWords = new Set(xNome.split(/\s+/).filter(w => w.length > 2));
+        let common = 0;
+        for (const w of bWords) if (xWords.has(w)) common++;
+        const total = Math.max(bWords.size, xWords.size);
+        nomeMatch = total > 0 && common / total >= 0.5 ? "parcial" : "divergente";
+      }
+    }
+    rows.push({ campo: "Nome", bolVal: boleto.pagador || "—", nfVal: xml.nome_destinatario || "—", match: nomeMatch });
+
+    // CNPJ
+    const bCnpj = (boleto.cnpj || "").replace(/\D/g, "");
+    const xCnpj = (xml.cnpj || "").replace(/\D/g, "");
+    rows.push({ campo: "CNPJ", bolVal: boleto.cnpj || "—", nfVal: xml.cnpj || "—", match: bCnpj && xCnpj ? (bCnpj === xCnpj ? "ok" : "divergente") : "n/a" });
+
+    // Email
+    rows.push({ campo: "Email", bolVal: "—", nfVal: xml.emails.length > 0 ? xml.emails.join(", ") : "—", match: xml.emails.length > 0 ? "ok" : "n/a" });
+
+    return (
+      <div className="rounded-lg bg-background p-4">
+        <p className="text-sm font-semibold mb-3">Confronto: Boleto vs Nota Fiscal</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left py-2 pr-4 font-medium text-muted-foreground w-[120px]">Campo</th>
+                <th className="text-left py-2 pr-4 font-medium">Boleto (extraido)</th>
+                <th className="text-left py-2 pr-4 font-medium">Nota Fiscal (XML)</th>
+                <th className="text-center py-2 font-medium w-[80px]">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.campo} className="border-b last:border-0">
+                  <td className="py-2 pr-4 font-medium text-muted-foreground">{r.campo}</td>
+                  <td className="py-2 pr-4 font-[family-name:var(--font-barlow-condensed)]">{r.bolVal}</td>
+                  <td className="py-2 pr-4 font-[family-name:var(--font-barlow-condensed)]">{r.nfVal}</td>
+                  <td className="py-2 text-center">
+                    {r.match === "ok" && <span className="inline-flex items-center gap-1 text-success"><CheckCircle2 className="h-4 w-4" /> OK</span>}
+                    {r.match === "parcial" && <span className="inline-flex items-center gap-1 text-warning"><AlertTriangle className="h-4 w-4" /> Parcial</span>}
+                    {r.match === "divergente" && <span className="inline-flex items-center gap-1 text-destructive"><XCircle className="h-4 w-4" /> Divergente</span>}
+                    {r.match === "n/a" && <span className="text-muted-foreground text-xs">N/A</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
   // -- Render --
 
   if (restoring) {
@@ -1471,7 +1556,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                             {expandedUploadBoleto === boleto.id && (
                               <TableRow>
                                 <TableCell colSpan={7} className="p-0">
-                                  <div className="bg-muted/30 p-4">
+                                  <div className="bg-muted/30 p-4 space-y-4">
                                     {previewBlobUrls[`boleto-${boleto.id}`] ? (
                                       <div className="space-y-2">
                                         <iframe
@@ -1501,6 +1586,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                                         Carregando preview...
                                       </div>
                                     )}
+                                    <ConfrontoBoletoNF boleto={boleto} xml={xml || null} />
                                   </div>
                                 </TableCell>
                               </TableRow>
@@ -1789,6 +1875,27 @@ function OperationEditor({ tabId }: { tabId: string }) {
                                                   {xml.nome_destinatario || "—"}
                                                 </p>
                                               </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Confronto por boleto */}
+                                  {grupo.boletos.length > 0 && (
+                                    <div>
+                                      <p className="text-sm font-medium mb-2">Confronto Boleto vs Nota Fiscal</p>
+                                      <div className="space-y-3">
+                                        {grupo.boletos.map((boleto) => {
+                                          const nfKey = (boleto.numero_nota || "").replace(/^0+/, "") || "0";
+                                          const xmlMatch = grupo.xmls.find(x => ((x.numero_nota || "").replace(/^0+/, "") || "0") === nfKey) || null;
+                                          return (
+                                            <div key={`confronto-${boleto.id}`} className="border rounded-lg p-3 bg-background">
+                                              <p className="text-xs font-medium mb-2 truncate" title={boleto.arquivo_renomeado || boleto.arquivo_original}>
+                                                {boleto.arquivo_renomeado || boleto.arquivo_original}
+                                              </p>
+                                              <ConfrontoBoletoNF boleto={boleto} xml={xmlMatch} />
                                             </div>
                                           );
                                         })}
@@ -2093,6 +2200,8 @@ function OperationEditor({ tabId }: { tabId: string }) {
                                         Carregando preview...
                                       </div>
                                     )}
+                                    {/* Confronto Boleto vs NF */}
+                                    <ConfrontoBoletoNF boleto={boleto} xml={xml ?? null} />
                                     {/* 5 Camadas */}
                                     <div className="rounded-lg bg-background p-4 space-y-2">
                                       <p className="text-sm font-semibold mb-3">Validacao em 5 Camadas</p>

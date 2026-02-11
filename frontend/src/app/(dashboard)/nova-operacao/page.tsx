@@ -76,11 +76,6 @@ interface Fidc {
   cor: string;
 }
 
-interface BoletoResumo {
-  id: string;
-  arquivo_original: string;
-}
-
 interface XmlResumo {
   id: string;
   nome_arquivo: string;
@@ -269,7 +264,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
   // Upload state
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
   const [xmlFiles, setXmlFiles] = useState<File[]>([]);
-  const [uploadedBoletos, setUploadedBoletos] = useState<BoletoResumo[]>([]);
+  const [uploadedBoletos, setUploadedBoletos] = useState<BoletoCompleto[]>([]);
   const [uploadedXmls, setUploadedXmls] = useState<XmlResumo[]>([]);
   const [uploading, setUploading] = useState(false);
 
@@ -345,6 +340,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
         }
 
         setUploadedXmls(op.xmls);
+        setUploadedBoletos(op.boletos);
       })
       .catch(() => {
         toast.error("Erro ao restaurar operação");
@@ -1149,6 +1145,66 @@ function OperationEditor({ tabId }: { tabId: string }) {
               </CardContent>
             </Card>
           )}
+
+          {/* Uploaded Boletos preview table */}
+          {uploadedBoletos.length > 0 && (() => {
+            const xmlByNota = new Map(
+              uploadedXmls.map((x) => [x.numero_nota.replace(/^0+/, "") || "0", x])
+            );
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Boletos Carregados ({uploadedBoletos.length})</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Arquivo</TableHead>
+                        <TableHead>Pagador</TableHead>
+                        <TableHead>NF</TableHead>
+                        <TableHead>Vencimento</TableHead>
+                        <TableHead className="text-right">Valor</TableHead>
+                        <TableHead>Destinatario</TableHead>
+                        <TableHead>Email</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {uploadedBoletos.map((boleto) => {
+                        const nfKey = (boleto.numero_nota || "").replace(/^0+/, "") || "0";
+                        const xml = xmlByNota.get(nfKey);
+                        return (
+                          <TableRow key={boleto.id}>
+                            <TableCell className="max-w-[200px] truncate text-sm" title={boleto.arquivo_renomeado || boleto.arquivo_original}>
+                              {boleto.arquivo_renomeado || boleto.arquivo_original}
+                            </TableCell>
+                            <TableCell className="max-w-[180px] truncate">{boleto.pagador || "—"}</TableCell>
+                            <TableCell className="font-[family-name:var(--font-barlow-condensed)] font-semibold">
+                              {boleto.numero_nota || "—"}
+                            </TableCell>
+                            <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
+                              {boleto.vencimento || "—"}
+                            </TableCell>
+                            <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
+                              {boleto.valor_formatado || "—"}
+                            </TableCell>
+                            <TableCell className="max-w-[180px] truncate">
+                              {xml?.nome_destinatario || "—"}
+                            </TableCell>
+                            <TableCell className="max-w-[200px] truncate text-sm">
+                              {xml && xml.emails.length > 0 ? xml.emails.join(", ") : "—"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           <div className="flex gap-3">
             <Button onClick={handleUpload} disabled={uploading || pdfFiles.length === 0}>

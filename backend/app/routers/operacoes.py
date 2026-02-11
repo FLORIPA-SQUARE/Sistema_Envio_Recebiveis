@@ -53,7 +53,6 @@ from app.models.audit_log import AuditLog
 from app.models.envio import Envio
 from app.schemas.operacao import (
     BoletoCompleto,
-    BoletoResumo,
     DashboardStats,
     EnvioDetalhe,
     EnvioRequest,
@@ -370,6 +369,7 @@ async def upload_boletos(
     _current_user: Usuario = Depends(get_current_user),
 ):
     op = await _get_operacao(op_id, db)
+    fidc = await _get_fidc(op.fidc_id, db)
 
     # Verificar duplicatas — buscar nomes de arquivos ja enviados
     existing = await db.execute(
@@ -383,11 +383,14 @@ async def upload_boletos(
     boletos_dir.mkdir(parents=True, exist_ok=True)
     split_dir.mkdir(parents=True, exist_ok=True)
 
+    # Obter extrator pelo FIDC para extracao antecipada
+    extrator = get_extractor_by_name(fidc.nome)
+
     total_paginas = 0
-    boletos_criados: list[BoletoResumo] = []
+    boletos_criados: list[BoletoCompleto] = []
 
     for file in files:
-        # Validação: apenas PDF
+        # Validacao: apenas PDF
         if not file.filename or not file.filename.lower().endswith(".pdf"):
             raise HTTPException(
                 status_code=400,
@@ -410,18 +413,37 @@ async def upload_boletos(
         split_files = split_pdf(orig_path, split_dir)
         total_paginas += len(split_files)
 
-        # Cria registro no banco para cada página
+        # Cria registro no banco para cada pagina + extracao antecipada
         for sf in split_files:
             boleto = Boleto(
                 operacao_id=op.id,
                 arquivo_original=sf.name,
                 arquivo_path=str(sf),
             )
+
+            # Extracao antecipada: extrair dados do PDF
+            try:
+                texto = _extrair_texto_pdf(str(sf))
+                dados_boleto = extrator.extrair(texto, sf.name)
+                nome_renomeado = gerar_nome_arquivo(dados_boleto)
+
+                boleto.pagador = dados_boleto.pagador
+                boleto.cnpj = dados_boleto.cnpj
+                boleto.numero_nota = dados_boleto.numero_nota
+                boleto.vencimento = dados_boleto.vencimento
+                boleto.vencimento_date = _parse_vencimento_date(dados_boleto.vencimento_completo)
+                boleto.valor = dados_boleto.valor
+                boleto.valor_formatado = dados_boleto.valor_formatado
+                boleto.fidc_detectada = dados_boleto.fidc_detectada
+                boleto.arquivo_renomeado = nome_renomeado
+            except Exception as exc:
+                logger.warning("Extracao antecipada falhou para %s: %s", sf.name, exc)
+
             db.add(boleto)
             await db.flush()
-            boletos_criados.append(BoletoResumo(id=boleto.id, arquivo_original=sf.name))
+            boletos_criados.append(BoletoCompleto.model_validate(boleto))
 
-    # Atualiza total na operação
+    # Atualiza total na operacao
     op.total_boletos = len(boletos_criados)
     await db.commit()
 

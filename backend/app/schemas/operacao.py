@@ -105,7 +105,7 @@ class OperacaoDetalhada(BaseModel):
 class UploadBoletosResponse(BaseModel):
     total_paginas: int
     boletos_criados: int
-    boletos: list[BoletoResumo]
+    boletos: list[BoletoCompleto]
 
 
 class UploadXmlsResponse(BaseModel):

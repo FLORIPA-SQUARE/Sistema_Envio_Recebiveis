@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.routers import auth, auditoria, email_layout, fidcs, operacoes
 
@@ -23,6 +24,8 @@ app.include_router(fidcs.router, prefix="/api/v1")
 app.include_router(operacoes.router, prefix="/api/v1")
 app.include_router(auditoria.router, prefix="/api/v1")
 app.include_router(email_layout.router, prefix="/api/v1")
+
+app.mount("/api/v1/assets", StaticFiles(directory="app/assets"), name="assets")
 
 
 @app.get("/api/health")

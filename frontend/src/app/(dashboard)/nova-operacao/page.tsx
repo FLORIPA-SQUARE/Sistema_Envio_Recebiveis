@@ -64,6 +64,7 @@ import {
   Plus,
   ChevronRight,
   Maximize2,
+  Paperclip,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { FileDropzone } from "@/components/file-dropzone";
@@ -299,10 +300,10 @@ function OperationEditor({ tabId }: { tabId: string }) {
   const [envioResult, setEnvioResult] = useState<EnvioResultado | null>(null);
   const [envios, setEnvios] = useState<EnvioRecord[]>([]);
   const [enviosLoading, setEnviosLoading] = useState(false);
-  const [marcarEnviadoId, setMarcarEnviadoId] = useState<string | null>(null);
   const [confirmEnvioAuto, setConfirmEnvioAuto] = useState(false);
   const [emailPreviewHtml, setEmailPreviewHtml] = useState<string | null>(null);
   const [emailPreviewSubject, setEmailPreviewSubject] = useState("");
+  const [emailPreviewAttachments, setEmailPreviewAttachments] = useState<{name: string; url: string}[]>([]);
   const [confirmarTodosLoading, setConfirmarTodosLoading] = useState(false);
   const [expandedBoleto, setExpandedBoleto] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -729,17 +730,78 @@ function OperationEditor({ tabId }: { tabId: string }) {
     }
   }
 
-  async function handleMarcarEnviado(envioId: string) {
+
+  function preparePreviewHtml(html: string): string {
+    return html.replace(/cid:assinatura_jj/g, "/api/v1/assets/assinatura.jpg");
+  }
+
+  function buildAttachmentsForEnvio(envio: EnvioRecord): {name: string; url: string}[] {
+    const attachments: {name: string; url: string}[] = [];
+    // Boletos
+    if (envio.boletos_ids) {
+      for (const bid of envio.boletos_ids) {
+        const boleto = uploadedBoletos.find((b) => b.id === bid);
+        const name = boleto?.arquivo_renomeado || boleto?.arquivo_original || "boleto.pdf";
+        attachments.push({ name, url: `/api/v1/operacoes/${operacaoId}/boletos/${bid}/arquivo` });
+      }
+    }
+    // NFs em PDF (o XML serve apenas para dados — o anexo real e o PDF da NF)
+    if (envio.xmls_anexados) {
+      for (const xmlName of envio.xmls_anexados) {
+        const xml = uploadedXmls.find((x) => x.nome_arquivo === xmlName);
+        if (xml && xml.numero_nota) {
+          const nfPdf = uploadedXmls.find(
+            (x) => x.nome_arquivo.toLowerCase().endsWith(".pdf") && x.numero_nota === xml.numero_nota
+          );
+          if (nfPdf) {
+            attachments.push({ name: nfPdf.nome_arquivo, url: `/api/v1/operacoes/${operacaoId}/xmls/${nfPdf.id}/arquivo` });
+          }
+        }
+      }
+    }
+    return attachments;
+  }
+
+  function buildAttachmentsForGrupo(grupo: PreviewEnvioGrupo): {name: string; url: string}[] {
+    const attachments: {name: string; url: string}[] = [];
+    for (const boleto of grupo.boletos) {
+      const name = boleto.arquivo_renomeado || boleto.arquivo_original || "boleto.pdf";
+      attachments.push({ name, url: `/api/v1/operacoes/${operacaoId}/boletos/${boleto.id}/arquivo` });
+    }
+    // NFs em PDF (buscar PDF correspondente ao XML pelo numero_nota)
+    for (const xml of grupo.xmls) {
+      if (xml.nome_arquivo.toLowerCase().endsWith(".xml") && xml.numero_nota) {
+        const nfPdf = grupo.xmls.find(
+          (x) => x.nome_arquivo.toLowerCase().endsWith(".pdf") && x.numero_nota === xml.numero_nota
+        );
+        if (nfPdf) {
+          attachments.push({ name: nfPdf.nome_arquivo, url: `/api/v1/operacoes/${operacaoId}/xmls/${nfPdf.id}/arquivo` });
+        }
+      } else if (xml.nome_arquivo.toLowerCase().endsWith(".pdf")) {
+        // PDFs avulsos (sem XML par) — incluir diretamente
+        const hasXmlPair = grupo.xmls.some(
+          (x) => x.nome_arquivo.toLowerCase().endsWith(".xml") && x.numero_nota === xml.numero_nota
+        );
+        if (!hasXmlPair) {
+          attachments.push({ name: xml.nome_arquivo, url: `/api/v1/operacoes/${operacaoId}/xmls/${xml.id}/arquivo` });
+        }
+      }
+    }
+    return attachments;
+  }
+
+  async function handleOpenAttachment(url: string) {
     try {
-      await apiFetch(`/operacoes/${operacaoId}/envios/${envioId}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "enviado" }),
+      const token = localStorage.getItem("token");
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      toast.success("Envio marcado como enviado");
-      setMarcarEnviadoId(null);
-      await fetchEnvios();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao atualizar status");
+      if (!res.ok) throw new Error(`Erro ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, "_blank");
+    } catch {
+      toast.error("Erro ao abrir anexo");
     }
   }
 
@@ -796,7 +858,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-1">
                         {envio.corpo_html && (
-                          <Button variant="ghost" size="icon" onClick={() => { setEmailPreviewSubject(envio.assunto); setEmailPreviewHtml(envio.corpo_html); }} className="h-8 w-8" title="Ver email">
+                          <Button variant="ghost" size="icon" onClick={() => { setEmailPreviewSubject(envio.assunto); setEmailPreviewHtml(preparePreviewHtml(envio.corpo_html!)); setEmailPreviewAttachments(buildAttachmentsForEnvio(envio)); }} className="h-8 w-8" title="Ver email">
                             <Eye className="h-4 w-4" />
                           </Button>
                         )}
@@ -804,9 +866,6 @@ function OperationEditor({ tabId }: { tabId: string }) {
                           <>
                             <Button variant="ghost" size="icon" onClick={() => handleConfirmarEnvio(envio.id)} className="h-8 w-8 text-success hover:text-success" title="Confirmar envio">
                               <Send className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setMarcarEnviadoId(envio.id)} className="h-8 w-8" title="Marcar como enviado manualmente">
-                              <CheckCircle2 className="h-4 w-4" />
                             </Button>
                           </>
                         )}
@@ -1947,7 +2006,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                               {grupo.boletos.length + grupo.xmls.length}
                             </TableCell>
                             <TableCell className="text-center">
-                              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEmailPreviewSubject(grupo.assunto); setEmailPreviewHtml(grupo.corpo_html); }} className="h-8 w-8" title="Ver email">
+                              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEmailPreviewSubject(grupo.assunto); setEmailPreviewHtml(preparePreviewHtml(grupo.corpo_html)); setEmailPreviewAttachments(buildAttachmentsForGrupo(grupo)); }} className="h-8 w-8" title="Ver email">
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </TableCell>
@@ -2666,21 +2725,41 @@ function OperationEditor({ tabId }: { tabId: string }) {
       </Dialog>
 
       {/* Email HTML preview modal */}
-      <Dialog open={!!emailPreviewHtml} onOpenChange={() => setEmailPreviewHtml(null)}>
-        <DialogContent className="max-w-[95vw] sm:max-w-3xl max-h-[85vh] overflow-hidden">
+      <Dialog open={!!emailPreviewHtml} onOpenChange={() => { setEmailPreviewHtml(null); setEmailPreviewAttachments([]); }}>
+        <DialogContent className="max-w-[95vw] sm:max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="truncate">{emailPreviewSubject}</DialogTitle>
-            <DialogDescription>Preview do conteudo do email. A imagem de assinatura sera incluida no email enviado.</DialogDescription>
+            <DialogDescription>Preview do email que sera enviado ao destinatario.</DialogDescription>
           </DialogHeader>
-          <div className="overflow-auto max-h-[65vh] border rounded bg-white">
+          <div className="overflow-auto flex-1 min-h-0 border rounded bg-white">
             <iframe
               srcDoc={emailPreviewHtml || ""}
-              className="w-full min-h-[400px] border-0"
+              className="w-full border-0"
               title="Email Preview"
               sandbox="allow-same-origin"
-              style={{ height: "60vh" }}
+              style={{ height: emailPreviewAttachments.length > 0 ? "50vh" : "60vh" }}
             />
           </div>
+          {emailPreviewAttachments.length > 0 && (
+            <div className="border rounded p-3 bg-muted/30">
+              <p className="text-sm font-medium flex items-center gap-2 mb-2">
+                <Paperclip className="h-4 w-4" />
+                Anexos ({emailPreviewAttachments.length})
+              </p>
+              <div className="flex flex-col gap-1">
+                {emailPreviewAttachments.map((att, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleOpenAttachment(att.url)}
+                    className="text-sm text-primary hover:underline flex items-center gap-2 truncate text-left cursor-pointer"
+                  >
+                    <FileText className="h-3.5 w-3.5 shrink-0" />
+                    {att.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -2704,24 +2783,6 @@ function OperationEditor({ tabId }: { tabId: string }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!marcarEnviadoId} onOpenChange={() => setMarcarEnviadoId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Marcar como Enviado</DialogTitle>
-            <DialogDescription>
-              Confirma que este email foi enviado manualmente?
-              O status sera atualizado de &quot;rascunho&quot; para &quot;enviado&quot;.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setMarcarEnviadoId(null)}>Cancelar</Button>
-            <Button onClick={() => { if (marcarEnviadoId) handleMarcarEnviado(marcarEnviadoId); }} className="gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              Confirmar
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={confirmDialog === "finalizar"} onOpenChange={() => setConfirmDialog(null)}>
         <DialogContent>

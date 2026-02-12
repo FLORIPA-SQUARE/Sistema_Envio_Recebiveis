@@ -35,6 +35,7 @@ def agrupar_boletos_para_envio(
     xmls: list,
     fidc,
     storage_base: Path,
+    email_layout: dict | None = None,
 ) -> list[EmailGroup]:
     """Agrupa boletos aprovados por email destino e gera dados de email.
 
@@ -43,6 +44,7 @@ def agrupar_boletos_para_envio(
         xmls: XmlNfe records da operacao
         fidc: Fidc record (com cc_emails, nome_completo, cnpj)
         storage_base: Path base do storage da operacao (uploads/{op_id})
+        email_layout: Dict com campos customizaveis (saudacao, introducao, mensagem_fechamento, assinatura_nome)
 
     Returns:
         Lista de EmailGroup prontos para OutlookMailer
@@ -142,11 +144,17 @@ def agrupar_boletos_para_envio(
 
         # Gerar assunto e corpo
         assunto = gerar_assunto(numeros_nf)
+        layout_kwargs = {}
+        if email_layout:
+            for k in ("saudacao", "introducao", "mensagem_fechamento", "assinatura_nome"):
+                if k in email_layout and email_layout[k]:
+                    layout_kwargs[k] = email_layout[k]
         corpo_html = gerar_email_html(
             nome_cliente=nome_cliente or "Cliente",
             boletos_info=boletos_info,
             nome_fidc_completo=fidc.nome_completo,
             cnpj_fidc=fidc.cnpj or "",
+            **layout_kwargs,
         )
 
         result.append(EmailGroup(

@@ -84,6 +84,7 @@ from app.schemas.fidc import FidcResponse
 from app.security import get_current_user
 from app.services.audit import registrar_audit
 from app.services.pdf_splitter import split_pdf
+from app.models.email_layout import EmailLayout
 from app.services.email_grouper import agrupar_boletos_para_envio
 from app.services.outlook_mailer import OutlookMailer
 from app.services.report_generator import (
@@ -423,9 +424,21 @@ async def preview_envio(
     )
     xmls = xmls_result.scalars().all()
 
+    # Buscar layout de email ativo
+    layout_result = await db.execute(select(EmailLayout).where(EmailLayout.ativo == True))
+    active_layout = layout_result.scalar_one_or_none()
+    layout_dict = None
+    if active_layout:
+        layout_dict = {
+            "saudacao": active_layout.saudacao,
+            "introducao": active_layout.introducao,
+            "mensagem_fechamento": active_layout.mensagem_fechamento,
+            "assinatura_nome": active_layout.assinatura_nome,
+        }
+
     # Agrupar por email destino
     storage_base = _storage_path() / "uploads" / str(op.id)
-    grupos = agrupar_boletos_para_envio(boletos_aprovados, xmls, fidc, storage_base)
+    grupos = agrupar_boletos_para_envio(boletos_aprovados, xmls, fidc, storage_base, email_layout=layout_dict)
 
     # Mapas para lookup rapido
     boletos_map = {str(b.id): b for b in boletos_aprovados}
@@ -1313,9 +1326,21 @@ async def enviar_operacao(
     )
     xmls = xmls_result.scalars().all()
 
+    # Buscar layout de email ativo
+    layout_result = await db.execute(select(EmailLayout).where(EmailLayout.ativo == True))
+    active_layout = layout_result.scalar_one_or_none()
+    layout_dict = None
+    if active_layout:
+        layout_dict = {
+            "saudacao": active_layout.saudacao,
+            "introducao": active_layout.introducao,
+            "mensagem_fechamento": active_layout.mensagem_fechamento,
+            "assinatura_nome": active_layout.assinatura_nome,
+        }
+
     # Agrupar por email destino
     storage_base = _storage_path() / "uploads" / str(op.id)
-    grupos = agrupar_boletos_para_envio(boletos_aprovados, xmls, fidc, storage_base)
+    grupos = agrupar_boletos_para_envio(boletos_aprovados, xmls, fidc, storage_base, email_layout=layout_dict)
 
     if not grupos:
         raise HTTPException(

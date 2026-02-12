@@ -16,6 +16,10 @@ def gerar_email_html(
     boletos_info: list[dict],
     nome_fidc_completo: str,
     cnpj_fidc: str,
+    saudacao: str = "Boa tarde,",
+    introducao: str = "Prezado cliente,",
+    mensagem_fechamento: str = "Em caso de duvidas, nossa equipe permanece a disposicao para esclarecimentos.",
+    assinatura_nome: str = "Equipe de Cobranca",
 ) -> str:
     """Gera corpo HTML do email conforme template do PRD.
 
@@ -24,6 +28,10 @@ def gerar_email_html(
         boletos_info: Lista de dicts com keys: numero_nota, valor_formatado, vencimento_completo
         nome_fidc_completo: Nome completo do FIDC beneficiario
         cnpj_fidc: CNPJ do FIDC formatado
+        saudacao: Saudacao inicial (ex: "Boa tarde,")
+        introducao: Introducao antes do nome (ex: "Prezado cliente,")
+        mensagem_fechamento: Mensagem de fechamento
+        assinatura_nome: Nome da assinatura (ex: "Equipe de Cobranca")
     """
     # Lista de NFs
     nfs_lista = ", ".join(b["numero_nota"] for b in boletos_info if b.get("numero_nota"))
@@ -44,9 +52,9 @@ def gerar_email_html(
 
     html = f"""<html>
 <body style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">
-<p>Boa tarde,</p>
+<p>{saudacao}</p>
 
-<p>Prezado cliente,<br>
+<p>{introducao}<br>
 <strong>{nome_cliente}</strong>,</p>
 
 <p>Enviamos anexo o(s) seu(s) {boleto_s} {emitido_s} conforme a(s) {nota_s}: <strong>{nfs_lista}</strong></p>
@@ -58,10 +66,10 @@ def gerar_email_html(
 <p>Vide {boleto_s} e {nota_s} em anexo.<br>
 Favor confirmar recebimento.</p>
 
-<p>Em caso de duvidas, nossa equipe permanece a disposicao para esclarecimentos.</p>
+<p>{mensagem_fechamento}</p>
 
 <p>Atenciosamente,<br>
-<strong>Equipe de Cobranca</strong></p>
+<strong>{assinatura_nome}</strong></p>
 <img src="cid:assinatura_jj" alt="JotaJota - Eletrica, Hidraulica, Iluminacao" style="max-width: 500px; height: auto;" />
 </body>
 </html>"""

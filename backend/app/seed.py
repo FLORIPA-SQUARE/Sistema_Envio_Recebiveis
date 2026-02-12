@@ -14,6 +14,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database import async_session
+from app.models.email_layout import EmailLayout
 from app.models.fidc import Fidc
 from app.models.usuario import Usuario
 from app.security import hash_password
@@ -87,8 +88,26 @@ async def seed():
         else:
             print(f"  [=] Usuário já existe: {DEFAULT_USER['email']}")
 
+        # Seed default email layout
+        result = await session.execute(select(EmailLayout).where(EmailLayout.nome == "Padrao"))
+        existing_layout = result.scalar_one_or_none()
+        if not existing_layout:
+            session.add(
+                EmailLayout(
+                    nome="Padrao",
+                    saudacao="Boa tarde,",
+                    introducao="Prezado cliente,",
+                    mensagem_fechamento="Em caso de duvidas, nossa equipe permanece a disposicao para esclarecimentos.",
+                    assinatura_nome="Equipe de Cobranca",
+                    ativo=True,
+                )
+            )
+            print("  [+] Email layout criado: Padrao")
+        else:
+            print("  [=] Email layout ja existe: Padrao")
+
         await session.commit()
-        print("\nSeed concluído!")
+        print("\nSeed concluido!")
 
 
 if __name__ == "__main__":

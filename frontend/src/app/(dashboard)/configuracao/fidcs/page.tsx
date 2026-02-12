@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
+import Link from "next/link";
 
 interface Fidc {
   id: string;
@@ -95,6 +96,14 @@ export default function FidcsPage() {
         <p className="text-muted-foreground">
           Gerencie as configurações de cada FIDC (emails CC, palavras-chave)
         </p>
+      </div>
+
+      {/* Config sub-navigation */}
+      <div className="flex gap-2 border-b pb-2">
+        <Button variant="secondary" size="sm">FIDCs</Button>
+        <Link href="/configuracao/email">
+          <Button variant="ghost" size="sm">Template de Email</Button>
+        </Link>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

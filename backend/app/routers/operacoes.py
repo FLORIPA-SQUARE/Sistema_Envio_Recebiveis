@@ -1804,12 +1804,36 @@ async def _reconstruir_email_group(envio: Envio, op: Operacao, db: AsyncSession)
                 if pdf_path.exists():
                     anexos_pdf.append(pdf_path)
 
-    # Buscar NF PDFs
+    # Buscar NF PDFs — encontrar PDF correspondente pelo numero_nota
     anexos_xml: list[Path] = []
-    for xml_name in envio.xmls_anexados:
-        nf_path = storage_base / "xmls" / xml_name
-        if nf_path.exists() and nf_path.suffix.lower() == ".pdf":
-            anexos_xml.append(nf_path)
+    if envio.xmls_anexados:
+        xmls_result = await db.execute(
+            select(XmlNfe).where(
+                XmlNfe.operacao_id == op.id,
+                XmlNfe.nome_arquivo.in_(envio.xmls_anexados),
+            )
+        )
+        xml_records = xmls_result.scalars().all()
+
+        # Buscar todos os PDFs de NF da operacao
+        all_xmls_result = await db.execute(
+            select(XmlNfe).where(XmlNfe.operacao_id == op.id)
+        )
+        all_xmls = all_xmls_result.scalars().all()
+        nf_pdfs_by_nota: dict[str, XmlNfe] = {}
+        for x in all_xmls:
+            if x.nome_arquivo.lower().endswith(".pdf"):
+                nf_key = (x.numero_nota or "").lstrip("0") or "0"
+                nf_pdfs_by_nota[nf_key] = x
+
+        nf_dir = storage_base / "xmls"
+        for xml_rec in xml_records:
+            nf_key = (xml_rec.numero_nota or "").lstrip("0") or "0"
+            nf_pdf = nf_pdfs_by_nota.get(nf_key)
+            if nf_pdf:
+                nf_pdf_path = nf_dir / nf_pdf.nome_arquivo
+                if nf_pdf_path.exists():
+                    anexos_xml.append(nf_pdf_path)
 
     return EmailGroup(
         email_para=envio.email_para,

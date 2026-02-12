@@ -606,12 +606,6 @@ async def upload_boletos(
     op = await _get_operacao(op_id, db)
     fidc = await _get_fidc(op.fidc_id, db)
 
-    # Verificar duplicatas — buscar nomes de arquivos ja enviados
-    existing = await db.execute(
-        select(Boleto.arquivo_original).where(Boleto.operacao_id == op.id)
-    )
-    existing_names = {row[0] for row in existing.all()}
-
     op_dir = _operacao_dir(op.id)
     boletos_dir = op_dir / "boletos"
     split_dir = op_dir / "boletos_split"
@@ -632,15 +626,15 @@ async def upload_boletos(
                 detail=f"Formato invalido: {file.filename}. Apenas arquivos PDF sao aceitos.",
             )
 
-        # Verificar duplicata
-        if file.filename in existing_names:
+        # Verificar duplicata: arquivo original ja existe no filesystem
+        orig_path = boletos_dir / file.filename
+        if orig_path.exists():
             raise HTTPException(
                 status_code=400,
                 detail=f"Arquivo duplicado: {file.filename} ja foi enviado nesta operacao.",
             )
 
         # Salva arquivo original
-        orig_path = boletos_dir / file.filename
         content = await file.read()
         orig_path.write_bytes(content)
 
@@ -701,12 +695,6 @@ async def upload_xmls(
 ):
     op = await _get_operacao(op_id, db)
 
-    # Verificar duplicatas — buscar nomes de arquivos ja enviados
-    existing_nf = await db.execute(
-        select(XmlNfe.nome_arquivo).where(XmlNfe.operacao_id == op.id)
-    )
-    existing_nf_names = {row[0] for row in existing_nf.all()}
-
     # Buscar numero_nota existentes (normalizados) para dedup XML vs PDF
     existing_notas = await db.execute(
         select(XmlNfe.numero_nota).where(XmlNfe.operacao_id == op.id)
@@ -726,22 +714,20 @@ async def upload_xmls(
     logger.info("UPLOAD_XMLS: %d arquivos recebidos, ordem: %s", len(files_sorted), [f.filename for f in files_sorted])
 
     for file in files_sorted:
-        # Validação: XML ou PDF
+        # Validacao: XML ou PDF
         if not file.filename or not file.filename.lower().endswith((".xml", ".pdf")):
             raise HTTPException(
                 status_code=400,
                 detail=f"Formato invalido: {file.filename}. Apenas arquivos XML ou PDF sao aceitos.",
             )
 
-        # Verificar duplicata
-        if file.filename in existing_nf_names:
+        # Verificar duplicata: arquivo ja existe no filesystem
+        nf_path = xmls_dir / file.filename
+        if nf_path.exists():
             raise HTTPException(
                 status_code=400,
                 detail=f"Arquivo duplicado: {file.filename} ja foi enviado nesta operacao.",
             )
-
-        # Salva arquivo
-        nf_path = xmls_dir / file.filename
         content = await file.read()
         nf_path.write_bytes(content)
 

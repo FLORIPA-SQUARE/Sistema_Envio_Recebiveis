@@ -47,6 +47,7 @@ async def buscar_auditoria(
         )
         .join(Operacao, Boleto.operacao_id == Operacao.id)
         .join(Fidc, Operacao.fidc_id == Fidc.id)
+        .where(Operacao.status == "concluida")
     )
 
     count_query = (
@@ -54,6 +55,7 @@ async def buscar_auditoria(
         .select_from(Boleto)
         .join(Operacao, Boleto.operacao_id == Operacao.id)
         .join(Fidc, Operacao.fidc_id == Fidc.id)
+        .where(Operacao.status == "concluida")
     )
 
     # ── Text search (ILIKE com OR) ──

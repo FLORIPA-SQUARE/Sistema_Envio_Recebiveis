@@ -352,7 +352,10 @@ function OperationEditor({ tabId }: { tabId: string }) {
         setSavedNumero(op.numero);
         setOperacaoCreatedAt(op.created_at);
 
-        if (op.status === "em_processamento" || op.status === "concluida") {
+        const foiProcessada = op.boletos.some((b: BoletoCompleto) =>
+          b.status === "aprovado" || b.status === "rejeitado"
+        );
+        if (foiProcessada) {
           // Restore resultado from operation data
           setResultado({
             total: op.total_boletos,
@@ -375,7 +378,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
             setStep("processamento");
           }
         } else if (op.boletos.length > 0) {
-          setStep("upload");
+          setStep("processamento");
         } else {
           setStep("upload");
         }
@@ -471,11 +474,32 @@ function OperationEditor({ tabId }: { tabId: string }) {
       return;
     }
 
+    // Verificar duplicatas locais: comparar nomes dos arquivos selecionados com ja salvos
+    const savedBoletoNames = new Set(uploadedBoletos.map((b) => b.arquivo_original));
+    const dupPdfs = pdfFiles.filter((f) => savedBoletoNames.has(f.name));
+    const savedXmlNames = new Set(uploadedXmls.map((x) => x.nome_arquivo));
+    const dupXmls = xmlFiles.filter((f) => savedXmlNames.has(f.name));
+
+    if (dupPdfs.length === pdfFiles.length && (xmlFiles.length === 0 || dupXmls.length === xmlFiles.length)) {
+      const allDups = [...dupPdfs.map((f) => f.name), ...dupXmls.map((f) => f.name)];
+      toast.error(`Nao e possivel fazer upload de arquivos repetidos: ${allDups.join(", ")}`);
+      return;
+    }
+
+    // Filtrar apenas arquivos novos
+    const newPdfs = pdfFiles.filter((f) => !savedBoletoNames.has(f.name));
+    const newXmls = xmlFiles.filter((f) => !savedXmlNames.has(f.name));
+
+    if (newPdfs.length === 0) {
+      toast.error("Todos os boletos selecionados ja foram salvos nesta operacao");
+      return;
+    }
+
     setUploading(true);
 
     try {
       const pdfForm = new FormData();
-      pdfFiles.forEach((f) => pdfForm.append("files", f));
+      newPdfs.forEach((f) => pdfForm.append("files", f));
 
       const token = localStorage.getItem("token");
       const pdfRes = await fetch(`/api/v1/operacoes/${operacaoId}/boletos/upload`, {
@@ -493,9 +517,9 @@ function OperationEditor({ tabId }: { tabId: string }) {
       setUploadedBoletos(pdfData.boletos);
       toast.success(`${pdfData.boletos_criados} boleto(s) detectado(s)`);
 
-      if (xmlFiles.length > 0) {
+      if (newXmls.length > 0) {
         const xmlForm = new FormData();
-        xmlFiles.forEach((f) => xmlForm.append("files", f));
+        newXmls.forEach((f) => xmlForm.append("files", f));
 
         const xmlRes = await fetch(`/api/v1/operacoes/${operacaoId}/xmls/upload`, {
           method: "POST",
@@ -512,6 +536,10 @@ function OperationEditor({ tabId }: { tabId: string }) {
         setUploadedXmls(xmlData.xmls);
         toast.success(`${xmlData.total_xmls} XML(s) carregado(s)`);
       }
+
+      // Limpar arquivos selecionados apos upload bem-sucedido
+      setPdfFiles([]);
+      setXmlFiles([]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro no upload");
     } finally {
@@ -1506,7 +1534,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
           {/* Uploaded Boletos preview table */}
           {uploadedBoletos.length > 0 && (() => {
             const xmlByNota = new Map(
-              uploadedXmls.map((x) => [x.numero_nota.replace(/^0+/, "") || "0", x])
+              uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).map((x) => [(x.numero_nota || "").replace(/^0+/, "") || "0", x])
             );
             // Agrupamento visual por NF
             const nfGroups = new Map<string, number>();
@@ -2584,7 +2612,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
 
       {/* Preview modal */}
       <Dialog open={!!previewModal} onOpenChange={() => setPreviewModal(null)}>
-        <DialogContent className="max-w-5xl w-[95vw]">
+        <DialogContent className="max-w-[95vw] sm:max-w-5xl overflow-hidden">
           <DialogHeader>
             <DialogTitle className="truncate">{previewModal?.title}</DialogTitle>
             <DialogDescription>Preview do documento</DialogDescription>

@@ -201,6 +201,7 @@ class PreviewEnvioGrupo(BaseModel):
     email_para: list[str]
     email_cc: list[str]
     assunto: str
+    corpo_html: str
     boletos: list[BoletoCompleto]
     xmls: list[XmlResumo]
 
@@ -211,15 +212,3 @@ class PreviewEnvioResponse(BaseModel):
     grupos: list[PreviewEnvioGrupo]
 
 
-class VerificarStatusItem(BaseModel):
-    envio_id: uuid.UUID
-    assunto: str
-    status_anterior: str
-    status_novo: str
-    encontrado_enviados: bool
-
-
-class VerificarStatusResultado(BaseModel):
-    verificados: int
-    atualizados: int
-    itens: list[VerificarStatusItem]

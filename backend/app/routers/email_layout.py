@@ -1,7 +1,10 @@
+import smtplib
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.email_layout import EmailLayout
 from app.models.usuario import Usuario
@@ -130,3 +133,46 @@ async def delete_layout(
 
     await db.delete(layout)
     await db.commit()
+
+
+# ── SMTP status & test ────────────────────────────────────────
+
+
+@router.get("/smtp-status")
+async def smtp_status(
+    _current_user: Usuario = Depends(get_current_user),
+):
+    """Retorna info da configuracao SMTP (sem expor senha)."""
+    return {
+        "smtp_host": settings.SMTP_HOST,
+        "smtp_port": settings.SMTP_PORT,
+        "smtp_from_email": settings.SMTP_FROM_EMAIL,
+        "smtp_from_name": settings.SMTP_FROM_NAME,
+        "smtp_use_tls": settings.SMTP_USE_TLS,
+        "smtp_configurado": bool(settings.SMTP_HOST and settings.SMTP_FROM_EMAIL),
+    }
+
+
+@router.post("/smtp-test")
+async def smtp_test(
+    _current_user: Usuario = Depends(get_current_user),
+):
+    """Testa a conexao SMTP sem enviar email."""
+    if not settings.SMTP_HOST:
+        raise HTTPException(
+            status_code=400,
+            detail="SMTP_HOST nao configurado no .env",
+        )
+
+    try:
+        server = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10)
+        server.ehlo()
+        if settings.SMTP_USE_TLS:
+            server.starttls()
+            server.ehlo()
+        if settings.SMTP_USER and settings.SMTP_PASSWORD:
+            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+        server.quit()
+        return {"sucesso": True, "mensagem": "Conexao SMTP estabelecida com sucesso"}
+    except Exception as e:
+        return {"sucesso": False, "mensagem": f"Falha na conexao: {str(e)}"}

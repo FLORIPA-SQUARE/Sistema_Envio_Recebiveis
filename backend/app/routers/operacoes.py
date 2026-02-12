@@ -14,9 +14,10 @@ Endpoints:
   POST   /operacoes/{id}/reprocessar     — Reprocessar boletos rejeitados
   POST   /operacoes/{id}/finalizar       — Finalizar operacao + gerar relatorios
   POST   /operacoes/{id}/cancelar        — Cancelar operacao
-  POST   /operacoes/{id}/enviar          — Enviar emails via Outlook (preview/automatico)
+  POST   /operacoes/{id}/enviar          — Enviar emails via SMTP (preview/automatico)
   GET    /operacoes/{id}/envios          — Listar envios da operacao
-  POST   /operacoes/{id}/envios/verificar-status — Verificar se rascunhos foram enviados
+  POST   /operacoes/{id}/envios/{eid}/confirmar — Confirmar envio de rascunho SMTP
+  POST   /operacoes/{id}/envios/confirmar-todos — Confirmar todos os rascunhos SMTP
   PATCH  /operacoes/{id}/xmls/{xml_id}/emails    — Editar emails de um XML
   PATCH  /operacoes/{id}/envios/{eid}/status     — Marcar envio como enviado manualmente
   GET    /operacoes/{id}/relatorio       — Download de relatorio (TXT/JSON)
@@ -75,8 +76,6 @@ from app.schemas.operacao import (
     ResultadoProcessamento,
     UploadBoletosResponse,
     UploadXmlsResponse,
-    VerificarStatusItem,
-    VerificarStatusResultado,
     XmlEmailsUpdate,
     XmlResumo,
 )
@@ -85,8 +84,8 @@ from app.security import get_current_user
 from app.services.audit import registrar_audit
 from app.services.pdf_splitter import split_pdf
 from app.models.email_layout import EmailLayout
-from app.services.email_grouper import agrupar_boletos_para_envio
-from app.services.outlook_mailer import OutlookMailer
+from app.services.email_grouper import EmailGroup, agrupar_boletos_para_envio
+from app.services.smtp_mailer import SMTPMailer
 from app.services.report_generator import (
     gerar_relatorio_aprovados_txt,
     gerar_relatorio_erros_txt,
@@ -478,6 +477,7 @@ async def preview_envio(
             email_para=grupo.email_para,
             email_cc=grupo.email_cc,
             assunto=grupo.assunto,
+            corpo_html=grupo.corpo_html,
             boletos=grupo_boletos,
             xmls=grupo_xmls,
         ))
@@ -1289,7 +1289,7 @@ async def enviar_operacao(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Envia boletos aprovados via Outlook (preview = rascunho, automatico = envio direto)."""
+    """Envia boletos aprovados via SMTP (preview = rascunho no banco, automatico = envio direto)."""
     op = await _get_operacao(op_id, db)
 
     if op.status not in ("em_processamento", "concluida"):
@@ -1348,8 +1348,16 @@ async def enviar_operacao(
             detail="Nenhum email destino encontrado nos XMLs vinculados",
         )
 
-    # Instanciar mailer
-    mailer = OutlookMailer()
+    # Instanciar mailer SMTP
+    mailer = SMTPMailer(
+        host=settings.SMTP_HOST,
+        port=settings.SMTP_PORT,
+        user=settings.SMTP_USER,
+        password=settings.SMTP_PASSWORD,
+        use_tls=settings.SMTP_USE_TLS,
+        from_email=settings.SMTP_FROM_EMAIL,
+        from_name=settings.SMTP_FROM_NAME,
+    )
 
     detalhes: list[EnvioDetalhe] = []
     emails_enviados = 0
@@ -1438,19 +1446,79 @@ async def listar_envios(
     return [EnvioResponse.model_validate(e) for e in envios]
 
 
-# ── POST /operacoes/{id}/envios/verificar-status ─────────────
+# ── POST /operacoes/{id}/envios/{envio_id}/confirmar ──────────
 
 
-@router.post("/{op_id}/envios/verificar-status", response_model=VerificarStatusResultado)
-async def verificar_status_envios(
+@router.post("/{op_id}/envios/{envio_id}/confirmar", response_model=EnvioResponse)
+async def confirmar_envio(
+    op_id: str,
+    envio_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Confirma e envia um rascunho via SMTP."""
+    op = await _get_operacao(op_id, db)
+
+    result = await db.execute(
+        select(Envio).where(Envio.id == envio_id, Envio.operacao_id == op_id)
+    )
+    envio = result.scalar_one_or_none()
+    if not envio:
+        raise HTTPException(status_code=404, detail="Envio nao encontrado")
+
+    if envio.status != "rascunho":
+        raise HTTPException(
+            status_code=400,
+            detail="Apenas envios com status 'rascunho' podem ser confirmados",
+        )
+
+    group = await _reconstruir_email_group(envio, op, db)
+
+    mailer = SMTPMailer(
+        host=settings.SMTP_HOST,
+        port=settings.SMTP_PORT,
+        user=settings.SMTP_USER,
+        password=settings.SMTP_PASSWORD,
+        use_tls=settings.SMTP_USE_TLS,
+        from_email=settings.SMTP_FROM_EMAIL,
+        from_name=settings.SMTP_FROM_NAME,
+    )
+
+    try:
+        mailer.send_email(group)
+        envio.status = "enviado"
+        envio.timestamp_envio = datetime.now(timezone.utc)
+    except RuntimeError as e:
+        envio.status = "erro"
+        envio.erro_detalhes = str(e)
+
+    await registrar_audit(
+        db,
+        acao="confirmar_envio_smtp",
+        operacao_id=op.id,
+        usuario_id=current_user.id,
+        entidade="envio",
+        entidade_id=str(envio.id),
+        detalhes={"status": envio.status},
+    )
+    await db.commit()
+    await db.refresh(envio)
+
+    return EnvioResponse.model_validate(envio)
+
+
+# ── POST /operacoes/{id}/envios/confirmar-todos ──────────────
+
+
+@router.post("/{op_id}/envios/confirmar-todos", response_model=EnvioResultado)
+async def confirmar_todos_envios(
     op_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Verifica na pasta Itens Enviados do Outlook se rascunhos foram enviados."""
-    await _get_operacao(op_id, db)
+    """Confirma e envia todos os rascunhos SMTP de uma operacao."""
+    op = await _get_operacao(op_id, db)
 
-    # Buscar envios com status rascunho
     result = await db.execute(
         select(Envio)
         .where(Envio.operacao_id == op_id, Envio.status == "rascunho")
@@ -1458,52 +1526,60 @@ async def verificar_status_envios(
     rascunhos = result.scalars().all()
 
     if not rascunhos:
-        return VerificarStatusResultado(verificados=0, atualizados=0, itens=[])
+        raise HTTPException(status_code=400, detail="Nenhum rascunho pendente")
 
-    # Montar lista para verificacao COM
-    from app.services.outlook_mailer import OutlookMailer
+    mailer = SMTPMailer(
+        host=settings.SMTP_HOST,
+        port=settings.SMTP_PORT,
+        user=settings.SMTP_USER,
+        password=settings.SMTP_PASSWORD,
+        use_tls=settings.SMTP_USE_TLS,
+        from_email=settings.SMTP_FROM_EMAIL,
+        from_name=settings.SMTP_FROM_NAME,
+    )
 
-    mailer = OutlookMailer()
-    pendentes = [(r.assunto, r.email_para) for r in rascunhos]
-    encontrados = mailer.verificar_itens_enviados(pendentes)
+    detalhes: list[EnvioDetalhe] = []
+    emails_enviados = 0
 
-    # Atualizar status dos encontrados
-    itens: list[VerificarStatusItem] = []
-    atualizados = 0
+    for envio in rascunhos:
+        group = await _reconstruir_email_group(envio, op, db)
 
-    for rascunho in rascunhos:
-        encontrado = encontrados.get(rascunho.assunto, False)
-        status_novo = "enviado" if encontrado else "rascunho"
+        try:
+            mailer.send_email(group)
+            envio.status = "enviado"
+            envio.timestamp_envio = datetime.now(timezone.utc)
+            emails_enviados += 1
+        except RuntimeError as e:
+            envio.status = "erro"
+            envio.erro_detalhes = str(e)
 
-        if encontrado:
-            rascunho.status = "enviado"
-            rascunho.timestamp_envio = datetime.now(timezone.utc)
-            atualizados += 1
-
-            await registrar_audit(
-                db,
-                acao="envio_status_atualizado",
-                operacao_id=uuid.UUID(op_id),
-                usuario_id=current_user.id,
-                entidade="envio",
-                entidade_id=str(rascunho.id),
-                detalhes={"de": "rascunho", "para": "enviado", "via": "outlook_check"},
-            )
-
-        itens.append(VerificarStatusItem(
-            envio_id=rascunho.id,
-            assunto=rascunho.assunto,
-            status_anterior="rascunho",
-            status_novo=status_novo,
-            encontrado_enviados=encontrado,
+        detalhes.append(EnvioDetalhe(
+            email_para=envio.email_para,
+            email_cc=envio.email_cc,
+            assunto=envio.assunto,
+            boletos_count=len(envio.boletos_ids),
+            xmls_count=len(envio.xmls_anexados),
+            status=envio.status,
         ))
 
+    await registrar_audit(
+        db,
+        acao="confirmar_todos_envios_smtp",
+        operacao_id=op.id,
+        usuario_id=current_user.id,
+        entidade="envio",
+        detalhes={
+            "total_rascunhos": len(rascunhos),
+            "emails_enviados": emails_enviados,
+        },
+    )
     await db.commit()
 
-    return VerificarStatusResultado(
-        verificados=len(rascunhos),
-        atualizados=atualizados,
-        itens=itens,
+    return EnvioResultado(
+        emails_criados=len(rascunhos),
+        emails_enviados=emails_enviados,
+        modo="confirmar",
+        detalhes=detalhes,
     )
 
 
@@ -1706,3 +1782,43 @@ def _renomear_arquivo(original: Path, novo_nome: str) -> None:
     novo_path = original.parent / novo_nome
     if novo_path != original:
         shutil.move(str(original), str(novo_path))
+
+
+async def _reconstruir_email_group(envio: Envio, op: Operacao, db: AsyncSession) -> EmailGroup:
+    """Reconstroi EmailGroup a partir de um registro Envio para reenvio via SMTP."""
+    storage_base = _storage_path() / "uploads" / str(op.id)
+
+    # Buscar boletos para paths dos anexos PDF
+    anexos_pdf: list[Path] = []
+    if envio.boletos_ids:
+        boletos_result = await db.execute(
+            select(Boleto).where(Boleto.id.in_(envio.boletos_ids))
+        )
+        for b in boletos_result.scalars().all():
+            if b.arquivo_path:
+                pdf_path = Path(b.arquivo_path)
+                if b.arquivo_renomeado:
+                    renamed = pdf_path.parent / b.arquivo_renomeado
+                    if renamed.exists():
+                        pdf_path = renamed
+                if pdf_path.exists():
+                    anexos_pdf.append(pdf_path)
+
+    # Buscar NF PDFs
+    anexos_xml: list[Path] = []
+    for xml_name in envio.xmls_anexados:
+        nf_path = storage_base / "xmls" / xml_name
+        if nf_path.exists() and nf_path.suffix.lower() == ".pdf":
+            anexos_xml.append(nf_path)
+
+    return EmailGroup(
+        email_para=envio.email_para,
+        email_cc=envio.email_cc,
+        assunto=envio.assunto,
+        corpo_html=envio.corpo_html or "",
+        boletos_ids=[str(bid) for bid in envio.boletos_ids],
+        xmls_ids=[],
+        xmls_nomes=envio.xmls_anexados,
+        anexos_pdf=anexos_pdf,
+        anexos_xml=anexos_xml,
+    )

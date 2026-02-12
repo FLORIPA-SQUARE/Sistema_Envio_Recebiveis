@@ -24,6 +24,15 @@ class Settings(BaseSettings):
     # Paths
     STORAGE_DIR: str = str(Path(__file__).resolve().parent.parent / "storage")
 
+    # SMTP
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_FROM_NAME: str = "Equipe de Cobranca"
+
     @property
     def database_url_sync(self) -> str:
         return self.DATABASE_URL.replace("+asyncpg", "")

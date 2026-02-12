@@ -20,8 +20,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, CheckCircle2, Eye, Mail } from "lucide-react";
+import { Plus, Pencil, Trash2, CheckCircle2, Eye, Mail, Loader2, Server } from "lucide-react";
 import Link from "next/link";
+
+interface SmtpStatus {
+  smtp_host: string;
+  smtp_port: number;
+  smtp_from_email: string;
+  smtp_from_name: string;
+  smtp_use_tls: boolean;
+  smtp_configurado: boolean;
+}
 
 interface EmailLayout {
   id: string;
@@ -53,6 +62,10 @@ export default function EmailConfigPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [previewLayout, setPreviewLayout] = useState<EmailLayout | null>(null);
 
+  // SMTP state
+  const [smtpStatus, setSmtpStatus] = useState<SmtpStatus | null>(null);
+  const [smtpTesting, setSmtpTesting] = useState(false);
+
   // Form fields
   const [formNome, setFormNome] = useState("");
   const [formSaudacao, setFormSaudacao] = useState("");
@@ -71,8 +84,37 @@ export default function EmailConfigPage() {
     }
   }
 
+  async function loadSmtpStatus() {
+    try {
+      const data = await apiFetch<SmtpStatus>("/configuracao/email-layouts/smtp-status");
+      setSmtpStatus(data);
+    } catch {
+      // Silently ignore — SMTP status is informational
+    }
+  }
+
+  async function handleSmtpTest() {
+    setSmtpTesting(true);
+    try {
+      const data = await apiFetch<{ sucesso: boolean; mensagem: string }>(
+        "/configuracao/email-layouts/smtp-test",
+        { method: "POST" }
+      );
+      if (data.sucesso) {
+        toast.success(data.mensagem);
+      } else {
+        toast.error(data.mensagem);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao testar conexao");
+    } finally {
+      setSmtpTesting(false);
+    }
+  }
+
   useEffect(() => {
     loadLayouts();
+    loadSmtpStatus();
   }, []);
 
   function openCreate() {
@@ -172,6 +214,57 @@ export default function EmailConfigPage() {
         </Link>
         <Button variant="secondary" size="sm">Template de Email</Button>
       </div>
+
+      {/* SMTP Account Card */}
+      {smtpStatus && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Server className="h-4 w-4" /> Conta de Envio (SMTP)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {smtpStatus.smtp_configurado ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Servidor:</span>{" "}
+                    <span className="font-medium">{smtpStatus.smtp_host}:{smtpStatus.smtp_port}{smtpStatus.smtp_use_tls ? " (TLS)" : ""}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Remetente:</span>{" "}
+                    <span className="font-medium">{smtpStatus.smtp_from_email}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Nome:</span>{" "}
+                    <span className="font-medium">{smtpStatus.smtp_from_name}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Status:</span>{" "}
+                    <Badge className="bg-success text-success-foreground">Configurado</Badge>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <p className="text-xs text-muted-foreground">
+                    Para alterar, edite as variaveis SMTP_* no arquivo .env e reinicie o backend.
+                  </p>
+                  <Button variant="outline" size="sm" onClick={handleSmtpTest} disabled={smtpTesting} className="gap-2 shrink-0">
+                    {smtpTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+                    Testar Conexao
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm space-y-2">
+                <p className="text-warning font-medium">SMTP nao configurado</p>
+                <p className="text-muted-foreground">
+                  Edite o arquivo .env com as variaveis SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM_EMAIL e reinicie o backend.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Action bar */}
       <div className="flex justify-end">

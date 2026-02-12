@@ -162,6 +162,7 @@ interface EnvioRecord {
   email_para: string[];
   email_cc: string[];
   assunto: string;
+  corpo_html: string | null;
   modo: string;
   status: string;
   erro_detalhes: string | null;
@@ -175,6 +176,7 @@ interface PreviewEnvioGrupo {
   email_para: string[];
   email_cc: string[];
   assunto: string;
+  corpo_html: string;
   boletos: BoletoCompleto[];
   xmls: XmlResumo[];
 }
@@ -297,9 +299,11 @@ function OperationEditor({ tabId }: { tabId: string }) {
   const [envioResult, setEnvioResult] = useState<EnvioResultado | null>(null);
   const [envios, setEnvios] = useState<EnvioRecord[]>([]);
   const [enviosLoading, setEnviosLoading] = useState(false);
-  const [verificarLoading, setVerificarLoading] = useState(false);
   const [marcarEnviadoId, setMarcarEnviadoId] = useState<string | null>(null);
   const [confirmEnvioAuto, setConfirmEnvioAuto] = useState(false);
+  const [emailPreviewHtml, setEmailPreviewHtml] = useState<string | null>(null);
+  const [emailPreviewSubject, setEmailPreviewSubject] = useState("");
+  const [confirmarTodosLoading, setConfirmarTodosLoading] = useState(false);
   const [expandedBoleto, setExpandedBoleto] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [operacaoCreatedAt, setOperacaoCreatedAt] = useState<string | null>(null);
@@ -684,7 +688,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
       });
       setEnvioResult(data);
       if (envioMode === "preview") {
-        toast.success(`${data.emails_criados} rascunho(s) criado(s) no Outlook`);
+        toast.success(`${data.emails_criados} rascunho(s) criado(s). Revise e confirme o envio.`);
       } else {
         toast.success(`${data.emails_enviados} email(s) enviado(s)`);
       }
@@ -696,24 +700,32 @@ function OperationEditor({ tabId }: { tabId: string }) {
     }
   }
 
-  async function handleVerificarStatus() {
-    if (!operacaoId) return;
-    setVerificarLoading(true);
+  async function handleConfirmarEnvio(envioId: string) {
     try {
-      const data = await apiFetch<{ verificados: number; atualizados: number }>(
-        `/operacoes/${operacaoId}/envios/verificar-status`,
-        { method: "POST" }
-      );
-      if (data.atualizados > 0) {
-        toast.success(`${data.atualizados} de ${data.verificados} envio(s) atualizado(s) para "enviado"`);
-      } else {
-        toast.info(`${data.verificados} rascunho(s) verificado(s), nenhum encontrado nos Itens Enviados`);
-      }
+      await apiFetch(`/operacoes/${operacaoId}/envios/${envioId}/confirmar`, {
+        method: "POST",
+      });
+      toast.success("Email enviado via SMTP");
       await fetchEnvios();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao verificar status");
+      toast.error(err instanceof Error ? err.message : "Erro ao enviar email");
+    }
+  }
+
+  async function handleConfirmarTodos() {
+    if (!operacaoId) return;
+    setConfirmarTodosLoading(true);
+    try {
+      const data = await apiFetch<EnvioResultado>(
+        `/operacoes/${operacaoId}/envios/confirmar-todos`,
+        { method: "POST" }
+      );
+      toast.success(`${data.emails_enviados} email(s) enviado(s) via SMTP`);
+      await fetchEnvios();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao enviar emails");
     } finally {
-      setVerificarLoading(false);
+      setConfirmarTodosLoading(false);
     }
   }
 
@@ -740,9 +752,9 @@ function OperationEditor({ tabId }: { tabId: string }) {
             <Mail className="h-4 w-4" /> Historico de Envios
           </CardTitle>
           {envios.some((e) => e.status === "rascunho") && (
-            <Button variant="outline" size="sm" onClick={handleVerificarStatus} disabled={verificarLoading} className="gap-2">
-              {verificarLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              Verificar Status
+            <Button variant="default" size="sm" onClick={handleConfirmarTodos} disabled={confirmarTodosLoading} className="gap-2">
+              {confirmarTodosLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              Enviar Todos
             </Button>
           )}
         </CardHeader>
@@ -782,11 +794,24 @@ function OperationEditor({ tabId }: { tabId: string }) {
                     </TableCell>
                     <TableCell className="text-center font-[family-name:var(--font-barlow-condensed)]">{envio.boletos_ids.length + envio.xmls_anexados.length}</TableCell>
                     <TableCell className="text-center">
-                      {envio.status === "rascunho" ? (
-                        <Button variant="ghost" size="icon" onClick={() => setMarcarEnviadoId(envio.id)} className="h-8 w-8 text-success hover:text-success" title="Marcar como enviado">
-                          <CheckCircle2 className="h-4 w-4" />
-                        </Button>
-                      ) : <span className="text-muted-foreground">—</span>}
+                      <div className="flex items-center justify-center gap-1">
+                        {envio.corpo_html && (
+                          <Button variant="ghost" size="icon" onClick={() => { setEmailPreviewSubject(envio.assunto); setEmailPreviewHtml(envio.corpo_html); }} className="h-8 w-8" title="Ver email">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {envio.status === "rascunho" && (
+                          <>
+                            <Button variant="ghost" size="icon" onClick={() => handleConfirmarEnvio(envio.id)} className="h-8 w-8 text-success hover:text-success" title="Confirmar envio">
+                              <Send className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => setMarcarEnviadoId(envio.id)} className="h-8 w-8" title="Marcar como enviado manualmente">
+                              <CheckCircle2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                        {envio.status !== "rascunho" && !envio.corpo_html && <span className="text-muted-foreground">—</span>}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1887,6 +1912,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                         <TableHead className="text-center">Boletos</TableHead>
                         <TableHead className="text-center">Notas</TableHead>
                         <TableHead className="text-center">Total Anexos</TableHead>
+                        <TableHead className="text-center">Acoes</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1920,10 +1946,15 @@ function OperationEditor({ tabId }: { tabId: string }) {
                             <TableCell className="text-center font-[family-name:var(--font-barlow-condensed)] font-semibold">
                               {grupo.boletos.length + grupo.xmls.length}
                             </TableCell>
+                            <TableCell className="text-center">
+                              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEmailPreviewSubject(grupo.assunto); setEmailPreviewHtml(grupo.corpo_html); }} className="h-8 w-8" title="Ver email">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
                           </TableRow>
                           {expandedEnvioGroup === idx && (
                             <TableRow>
-                              <TableCell colSpan={6} className="p-0">
+                              <TableCell colSpan={7} className="p-0">
                                 <div className="bg-muted/30 p-4 space-y-4">
                                   {/* CC */}
                                   {grupo.email_cc.length > 0 && (
@@ -2067,7 +2098,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {envioMode === "preview" ? "Os emails serao criados como rascunhos no Outlook." : "Os emails serao enviados diretamente pelo Outlook."}
+                  {envioMode === "preview" ? "Os emails serao criados como rascunhos. Revise o conteudo antes de confirmar o envio." : "Os emails serao enviados diretamente via SMTP. Esta acao nao pode ser desfeita."}
                 </p>
                 <div className="flex items-center gap-3">
                   <Button onClick={() => { if (envioMode === "automatico") { setConfirmEnvioAuto(true); } else { handleEnviar(); } }} disabled={envioLoading} className="gap-2">
@@ -2634,13 +2665,32 @@ function OperationEditor({ tabId }: { tabId: string }) {
         </DialogContent>
       </Dialog>
 
+      {/* Email HTML preview modal */}
+      <Dialog open={!!emailPreviewHtml} onOpenChange={() => setEmailPreviewHtml(null)}>
+        <DialogContent className="max-w-[95vw] sm:max-w-3xl max-h-[85vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="truncate">{emailPreviewSubject}</DialogTitle>
+            <DialogDescription>Preview do conteudo do email. A imagem de assinatura sera incluida no email enviado.</DialogDescription>
+          </DialogHeader>
+          <div className="overflow-auto max-h-[65vh] border rounded bg-white">
+            <iframe
+              srcDoc={emailPreviewHtml || ""}
+              className="w-full min-h-[400px] border-0"
+              title="Email Preview"
+              sandbox="allow-same-origin"
+              style={{ height: "60vh" }}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialogs */}
       <Dialog open={confirmEnvioAuto} onOpenChange={setConfirmEnvioAuto}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Envio Automatico</DialogTitle>
             <DialogDescription>
-              Deseja enviar {resultado?.aprovados || 0} boleto(s) automaticamente?
+              Deseja enviar {resultado?.aprovados || 0} boleto(s) automaticamente via SMTP?
               Os emails serao enviados diretamente sem possibilidade de revisao.
             </DialogDescription>
           </DialogHeader>

@@ -47,7 +47,7 @@ def agrupar_boletos_para_envio(
         email_layout: Dict com campos customizaveis (saudacao, introducao, mensagem_fechamento, assinatura_nome)
 
     Returns:
-        Lista de EmailGroup prontos para OutlookMailer
+        Lista de EmailGroup prontos para SMTPMailer
     """
     # Mapa de XMLs por ID
     xmls_map = {str(x.id): x for x in xmls}

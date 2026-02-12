@@ -731,6 +731,74 @@ function OperationEditor({ tabId }: { tabId: string }) {
     }
   }
 
+  function renderHistoricoEnvios() {
+    if (envios.length === 0 && !enviosLoading) return null;
+    return (
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Mail className="h-4 w-4" /> Historico de Envios
+          </CardTitle>
+          {envios.some((e) => e.status === "rascunho") && (
+            <Button variant="outline" size="sm" onClick={handleVerificarStatus} disabled={verificarLoading} className="gap-2">
+              {verificarLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              Verificar Status
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          {enviosLoading ? (
+            <p className="text-center text-muted-foreground py-4">Carregando...</p>
+          ) : envios.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">Nenhum envio realizado ainda</p>
+          ) : (
+            <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Criado em</TableHead>
+                  <TableHead>Enviado em</TableHead>
+                  <TableHead>Destinatario</TableHead>
+                  <TableHead>Assunto</TableHead>
+                  <TableHead>Modo</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-center">Anexos</TableHead>
+                  <TableHead className="text-center">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {envios.map((envio) => (
+                  <TableRow key={envio.id}>
+                    <TableCell className="text-sm whitespace-nowrap">{formatDate(envio.created_at)}</TableCell>
+                    <TableCell className="text-sm whitespace-nowrap">{envio.timestamp_envio ? formatDate(envio.timestamp_envio) : "—"}</TableCell>
+                    <TableCell className="text-sm max-w-[200px] truncate">{envio.email_para.join(", ")}</TableCell>
+                    <TableCell className="text-sm max-w-[200px] truncate">{envio.assunto}</TableCell>
+                    <TableCell><Badge variant="outline">{envio.modo === "preview" ? "Preview" : "Automatico"}</Badge></TableCell>
+                    <TableCell>
+                      {envio.status === "enviado" && <Badge className="bg-success text-success-foreground">Enviado</Badge>}
+                      {envio.status === "rascunho" && <Badge className="bg-warning text-warning-foreground">Rascunho</Badge>}
+                      {envio.status === "erro" && <Badge variant="destructive" title={envio.erro_detalhes || ""}>Erro</Badge>}
+                      {envio.status === "pendente" && <Badge variant="outline">Pendente</Badge>}
+                    </TableCell>
+                    <TableCell className="text-center font-[family-name:var(--font-barlow-condensed)]">{envio.boletos_ids.length + envio.xmls_anexados.length}</TableCell>
+                    <TableCell className="text-center">
+                      {envio.status === "rascunho" ? (
+                        <Button variant="ghost" size="icon" onClick={() => setMarcarEnviadoId(envio.id)} className="h-8 w-8 text-success hover:text-success" title="Marcar como enviado">
+                          <CheckCircle2 className="h-4 w-4" />
+                        </Button>
+                      ) : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   // -- Resultado (actions) --
 
   async function handleReprocessar() {
@@ -2012,6 +2080,9 @@ function OperationEditor({ tabId }: { tabId: string }) {
             </Card>
           )}
 
+          {/* Historico de envios (visivel apos enviar/criar rascunhos) */}
+          {renderHistoricoEnvios()}
+
           {/* Botao para ver resultado detalhado */}
           {resultado && (
             <div className="flex justify-end">
@@ -2541,69 +2612,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
 
             {/* Envio tab — historico only */}
             <TabsContent value="envio" className="mt-4 space-y-4">
-              {/* Historico de envios */}
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Mail className="h-4 w-4" /> Historico de Envios
-                  </CardTitle>
-                  {envios.some((e) => e.status === "rascunho") && (
-                    <Button variant="outline" size="sm" onClick={handleVerificarStatus} disabled={verificarLoading} className="gap-2">
-                      {verificarLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                      Verificar Status
-                    </Button>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  {enviosLoading ? (
-                    <p className="text-center text-muted-foreground py-4">Carregando...</p>
-                  ) : envios.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">Nenhum envio realizado ainda</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Criado em</TableHead>
-                          <TableHead>Enviado em</TableHead>
-                          <TableHead>Destinatario</TableHead>
-                          <TableHead>Assunto</TableHead>
-                          <TableHead>Modo</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-center">Anexos</TableHead>
-                          <TableHead className="text-center">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {envios.map((envio) => (
-                          <TableRow key={envio.id}>
-                            <TableCell className="text-sm whitespace-nowrap">{formatDate(envio.created_at)}</TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">{envio.timestamp_envio ? formatDate(envio.timestamp_envio) : "—"}</TableCell>
-                            <TableCell className="text-sm max-w-[200px] truncate">{envio.email_para.join(", ")}</TableCell>
-                            <TableCell className="text-sm max-w-[200px] truncate">{envio.assunto}</TableCell>
-                            <TableCell><Badge variant="outline">{envio.modo === "preview" ? "Preview" : "Automatico"}</Badge></TableCell>
-                            <TableCell>
-                              {envio.status === "enviado" && <Badge className="bg-success text-success-foreground">Enviado</Badge>}
-                              {envio.status === "rascunho" && <Badge className="bg-warning text-warning-foreground">Rascunho</Badge>}
-                              {envio.status === "erro" && <Badge variant="destructive" title={envio.erro_detalhes || ""}>Erro</Badge>}
-                              {envio.status === "pendente" && <Badge variant="outline">Pendente</Badge>}
-                            </TableCell>
-                            <TableCell className="text-center font-[family-name:var(--font-barlow-condensed)]">{envio.boletos_ids.length + envio.xmls_anexados.length}</TableCell>
-                            <TableCell className="text-center">
-                              {envio.status === "rascunho" ? (
-                                <Button variant="ghost" size="icon" onClick={() => setMarcarEnviadoId(envio.id)} className="h-8 w-8 text-success hover:text-success" title="Marcar como enviado">
-                                  <CheckCircle2 className="h-4 w-4" />
-                                </Button>
-                              ) : <span className="text-muted-foreground">—</span>}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              {renderHistoricoEnvios()}
             </TabsContent>
           </Tabs>
         </div>

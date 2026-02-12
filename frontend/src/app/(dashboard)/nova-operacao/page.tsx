@@ -2125,26 +2125,24 @@ function OperationEditor({ tabId }: { tabId: string }) {
                 size="icon"
                 onClick={() => setConfirmDialog("finalizar")}
                 disabled={actionLoading}
-                title="Finalizar — Marca a operação como concluída e gera relatórios"
+                title="Finalizar e Enviar dados para auditoria"
               >
                 <CheckCheck className="h-4 w-4" />
               </Button>
               <Button
                 size="icon"
-                variant="outline"
                 onClick={() => setConfirmDialog("cancelar")}
                 disabled={actionLoading}
-                className="border-warning text-warning hover:bg-warning/10 hover:text-warning"
-                title="Cancelar — Marca a operação como cancelada (irreversível)"
+                className="bg-warning text-warning-foreground hover:bg-warning/90"
+                title="Cancelar — Descarta a operação sem enviar para auditoria"
               >
                 <Ban className="h-4 w-4" />
               </Button>
               <Button
                 size="icon"
-                variant="outline"
                 onClick={() => setConfirmDialog("excluir")}
                 disabled={actionLoading}
-                className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 title="Excluir — Remove permanentemente a operação e todos os dados"
               >
                 <Trash2 className="h-4 w-4" />
@@ -2678,15 +2676,14 @@ function OperationEditor({ tabId }: { tabId: string }) {
       <Dialog open={confirmDialog === "finalizar"} onOpenChange={() => setConfirmDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Finalizar Operação</DialogTitle>
+            <DialogTitle>Finalizar e Enviar para Auditoria</DialogTitle>
             <DialogDescription>
-              Ao finalizar, a operação será marcada como concluída e os relatórios serão gerados.
-              Esta ação não pode ser desfeita.
+              Ao finalizar, os dados da operacao serao enviados para auditoria, os relatorios serao gerados e a operacao nao podera mais ser editada.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-3 mt-4">
             <Button variant="outline" onClick={() => setConfirmDialog(null)}>Voltar</Button>
-            <Button onClick={handleFinalizar} disabled={actionLoading}>Confirmar Finalização</Button>
+            <Button onClick={handleFinalizar} disabled={actionLoading}>Finalizar e Enviar</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -2696,8 +2693,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
           <DialogHeader>
             <DialogTitle>Cancelar Operação</DialogTitle>
             <DialogDescription>
-              Ao cancelar, a operação será marcada como cancelada e não poderá mais ser editada.
-              Esta ação não pode ser desfeita.
+              Ao cancelar, a operacao sera descartada sem enviar dados para auditoria. Esta acao nao pode ser desfeita.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-3 mt-4">

@@ -1,6 +1,6 @@
 # ESTADO ATUAL DO PROJETO — Sistema Automação Envio de Boletos
 
-> **Ultima atualizacao:** 2026-02-09
+> **Ultima atualizacao:** 2026-02-13
 > **Sessao:** Implementacao M1 + M2 + M3 + M4 + M5 + M6 + M7
 > **Fonte de verdade:** `docs/prd/PRD-001-Especificacao.md`
 
@@ -14,8 +14,8 @@
 ┌─ HOST WINDOWS ──────────────────────────────────────┐
 │                                                      │
 │  ┌─────────────────┐    ┌──────────────────────┐    │
-│  │ Next.js :3000   │    │ FastAPI :8000         │    │
-│  │ (npm run dev)   │───►│ (venv + uvicorn)      │──COM──► Outlook Desktop
+│  │ Next.js :5555   │    │ FastAPI :5556         │    │
+│  │ (npm run dev)   │───►│ (venv + uvicorn)      │──SMTP──► Email
 │  └─────────────────┘    └──────────┬───────────┘    │
 │                                    │ TCP:5432        │
 │         ┌─ DOCKER ──────────┐      │                │
@@ -28,10 +28,10 @@
 **REGRAS INVIOLÁVEIS:**
 - **NUNCA** criar Dockerfile para backend ou frontend
 - `docker-compose.yml` contém **APENAS** PostgreSQL
-- Backend FastAPI roda no **HOST Windows** via `venv` (necessário para `pywin32`)
+- Backend FastAPI roda no **HOST Windows** via `venv`
 - Frontend Next.js roda no **HOST Windows** via Node.js
-- `pywin32` é dependência **obrigatória** do Host — necessário para automação COM do Microsoft Outlook Desktop
-- Motivo: COM do Outlook **NÃO funciona** dentro de containers Linux/Windows
+- Envio de emails via **SMTP** (stdlib `smtplib`) — Outlook COM foi removido
+- **Portas:** Backend 5556, Frontend 5555, PostgreSQL 5432
 
 ---
 
@@ -40,13 +40,13 @@
 ### FASE 1: Fundação Híbrida (Setup) — ✅ CONCLUÍDA
 - [x] Criar estrutura de pastas (backend/ e frontend/)
 - [x] Criar `docker-compose.yml` APENAS para o PostgreSQL
-- [x] Configurar `venv` Python e instalar `fastapi`, `uvicorn`, `pywin32`
+- [x] Configurar `venv` Python e instalar `fastapi`, `uvicorn`
 - [x] Configurar Next.js com Tailwind e shadcn/ui
 - [x] Criar script `start_system.bat` e `stop_system.bat`
 - [x] Implementar autenticação JWT (login, bcrypt, 8h expiry)
 - [x] Implementar CRUD de FIDCs (GET lista, PUT editar)
 - [x] Seed de 4 FIDCs + 1 usuário admin
-- [x] Alembic migration com 7 tabelas + índices
+- [x] Alembic migration com 8 tabelas + índices
 
 ### FASE 2: Core Engine (Backend) — ✅ CONCLUÍDA
 - [x] Implementar Factory Pattern para os Extratores de PDF (Capital, Novax, Credvale, Squid)
@@ -62,9 +62,10 @@
 - [x] Criar endpoint de processamento (extração + validação + renomeação)
 - [x] Preview/tabela de XMLs parseados
 - [x] Tabela de resultado com boletos aprovados/rejeitados
+- [x] Edição de emails de XMLs (adicionar, remover, editar inline com duplo-clique)
 
 ### FASE 4: Ciclo de Vida de Operacoes — ✅ CONCLUIDA
-- [x] CRUD completo de operacoes (listar, detalhar, cancelar)
+- [x] CRUD completo de operacoes (listar, detalhar, cancelar, excluir)
 - [x] Fluxo de processamento integrado (reprocessar rejeitados)
 - [x] Reprocessar boletos rejeitados (POST /reprocessar)
 - [x] Finalizar operacao (POST /finalizar — gera relatorios TXT/JSON)
@@ -73,19 +74,21 @@
 - [x] Tela de Detalhes da Operacao com validacao 5 camadas expandivel
 - [x] Audit logging integrado em todas as acoes
 - [x] Download de relatorios (GET /relatorio?formato=json|txt_aprovados|txt_erros)
+- [x] Download de arquivos (GET /download-arquivos — ZIP com boletos renomeados)
 
-### FASE 5: Integração Outlook — ✅ CONCLUÍDA
-- [x] Criar classe de serviço `OutlookMailer` usando `win32com.client`
-- [x] Implementar método `create_draft()` (Modo Preview) com retry 3x + exponential backoff
-- [x] Implementar método `send_email()` (Modo Automático) com retry 3x + exponential backoff
-- [x] Garantir que o loop de envio suporte anexos múltiplos e ordenação por data (vencimento ASC)
+### FASE 5: Integração Email (SMTP) — ✅ CONCLUÍDA
+- [x] Criar classe de serviço `SmtpMailer` usando `smtplib` (stdlib)
+- [x] Implementar criação de rascunho (Modo Preview)
+- [x] Implementar envio direto (Modo Automático)
+- [x] Suporte a anexos múltiplos (boletos PDF + NFs PDF) e ordenação por data (vencimento ASC)
 - [x] Grouping de boletos por cliente (mesmo email = 1 email) via `email_grouper.py`
 - [x] Template de email com corpo HTML completo (nome cliente, NFs, valores, vencimentos, FIDC)
 - [x] CC por FIDC (Capital: adm@, Novax: adm@ + controladoria@, etc.)
 - [x] Schemas de envio (EnvioRequest, EnvioDetalhe, EnvioResultado, EnvioResponse)
 - [x] Endpoint POST /operacoes/{id}/enviar (preview ou automatico)
 - [x] Endpoint GET /operacoes/{id}/envios (listar envios)
-- [x] Frontend tab "Envio" na pagina de detalhes (toggle modo, preview, historico)
+- [x] Endpoint POST /operacoes/{id}/confirmar-envio (confirmar rascunhos)
+- [x] Endpoint GET /operacoes/{id}/preview-envio (preview de agrupamento)
 
 ### FASE 6: Dashboard + Auditoria — ✅ CONCLUÍDA
 - [x] Dashboard com KPIs reais (Total, Aprovados, Rejeitados, Taxa) — feito em M4
@@ -104,6 +107,9 @@
 - [x] Responsividade: header/actions wrap em mobile (detail page)
 - [x] .env.example com documentacao STORAGE_DIR
 - [x] start_system.bat com health check do backend (PowerShell Invoke-WebRequest)
+- [x] Configuração de email layouts (CRUD até 3 templates, ativar, SMTP status/test)
+- [x] CORS permissivo para acesso via rede local
+- [x] Sistema de abas multi-operação (contexto persistente, max 10 tabs)
 
 ---
 
@@ -115,7 +121,7 @@ Sistema_Envio_Recebiveis/
 ├── .env.example                            # Template
 ├── .gitignore
 ├── docker-compose.yml                      # PostgreSQL 16 Alpine APENAS
-├── start_system.bat                        # Inicia Docker + Backend + Frontend
+├── start_system.bat                        # Inicia Docker + Backend(5556) + Frontend(5555)
 ├── stop_system.bat                         # Para tudo
 ├── CLAUDE.md                               # Instruções do projeto
 │
@@ -133,27 +139,28 @@ Sistema_Envio_Recebiveis/
 │   └── _ESTADO_ATUAL_PROJETO.md            # ESTE ARQUIVO
 │
 ├── backend/
-│   ├── requirements.txt                    # FastAPI, SQLAlchemy, PyPDF2, pdfplumber, pywin32
-│   ├── main.py                             # Entry point — registra routers auth, fidcs, operacoes
+│   ├── requirements.txt                    # FastAPI, SQLAlchemy, PyPDF2, pdfplumber
+│   ├── main.py                             # Entry: 5 routers, CORS, static assets, port 5556
 │   ├── alembic.ini
 │   ├── alembic/
 │   │   ├── env.py                          # Async migration config
 │   │   └── versions/
-│   │       └── 001_initial_schema.py       # 7 tabelas + índices + uuid-ossp
+│   │       └── 001_initial_schema.py       # 8 tabelas + índices + uuid-ossp
 │   ├── app/
 │   │   ├── __init__.py
 │   │   ├── config.py                       # Settings (pydantic-settings, .env)
 │   │   ├── database.py                     # AsyncEngine + AsyncSession (asyncpg)
 │   │   ├── security.py                     # JWT + bcrypt + get_current_user
 │   │   ├── seed.py                         # 4 FIDCs + 1 admin (admin@jotajota.net.br / admin123)
-│   │   ├── models/
+│   │   ├── models/                         # 8 modelos
 │   │   │   ├── __init__.py                 # Re-exporta todos os modelos
 │   │   │   ├── usuario.py                  # UUID pk, nome, email, senha_hash, ativo
 │   │   │   ├── fidc.py                     # nome, nome_completo, cnpj, cc_emails[], palavras_chave[], cor
 │   │   │   ├── operacao.py                 # numero, fidc_id, status, modo_envio, totais
-│   │   │   ├── xml_nfe.py                  # numero_nota, cnpj, valor_total, emails[], duplicatas JSONB
+│   │   │   ├── xml_nfe.py                  # numero_nota, cnpj, valor_total, emails[], emails_invalidos[], duplicatas JSONB
 │   │   │   ├── boleto.py                   # pagador, valor, validacao_camada1-5 JSONB, status
 │   │   │   ├── envio.py                    # email_para[], email_cc[], boletos_ids[], status
+│   │   │   ├── email_layout.py             # nome, assunto_template, corpo_html, ativo, assinatura
 │   │   │   └── audit_log.py               # BIGSERIAL pk, acao, detalhes JSONB
 │   │   ├── schemas/
 │   │   │   ├── __init__.py
@@ -161,13 +168,14 @@ Sistema_Envio_Recebiveis/
 │   │   │   ├── fidc.py                     # FidcResponse, FidcUpdate
 │   │   │   ├── operacao.py                 # OperacaoCreate/Response/Detalhada, Upload/Process/Envio results
 │   │   │   └── auditoria.py               # AuditoriaItem + AuditoriaBuscarResponse
-│   │   ├── routers/
+│   │   ├── routers/                        # 5 routers, 38 endpoints
 │   │   │   ├── __init__.py
-│   │   │   ├── auth.py                     # POST /auth/login, GET /auth/me
-│   │   │   ├── fidcs.py                    # GET /fidcs, PUT /fidcs/{id}
-│   │   │   ├── operacoes.py               # 13 endpoints: CRUD, upload, processar, enviar, envios, relatorio
-│   │   │   └── auditoria.py              # GET /auditoria/buscar — busca global ILIKE
-│   │   ├── extractors/
+│   │   │   ├── auth.py                     # POST /auth/login, GET /auth/me (2)
+│   │   │   ├── fidcs.py                    # GET /fidcs, PUT /fidcs/{id} (2)
+│   │   │   ├── operacoes.py               # 26 endpoints: CRUD, upload, processar, enviar, emails, relatorio
+│   │   │   ├── auditoria.py              # GET /auditoria/buscar (1)
+│   │   │   └── email_layout.py           # CRUD layouts, ativar, smtp-status, smtp-test (7)
+│   │   ├── extractors/                     # 9 extractors
 │   │   │   ├── __init__.py                 # Re-exporta tudo
 │   │   │   ├── base.py                     # BaseExtractor (ABC) + helpers compartilhados
 │   │   │   ├── capital.py                  # CapitalExtractor — DANFE + boleto
@@ -178,14 +186,14 @@ Sistema_Envio_Recebiveis/
 │   │   │   ├── xml_parser.py              # parse_xml_nfe() — namespace handling, email validation
 │   │   │   ├── validator.py               # validar_5_camadas() — XML, CNPJ, Nome 85%, Valor 0, Email
 │   │   │   └── renamer.py                 # gerar_nome_arquivo() — {PAGADOR} - NF {NUM} - {DD-MM} - R$ {VALOR}.pdf
-│   │   └── services/
+│   │   └── services/                       # 6 services
 │   │       ├── __init__.py
 │   │       ├── pdf_splitter.py            # split_pdf() via PyPDF2
 │   │       ├── audit.py                   # registrar_audit() helper
 │   │       ├── report_generator.py        # Geracao TXT/JSON de relatorios
 │   │       ├── email_template.py          # gerar_email_html(), gerar_assunto()
 │   │       ├── email_grouper.py           # agrupar_boletos_para_envio(), EmailGroup
-│   │       └── outlook_mailer.py          # OutlookMailer — COM automation (create_draft, send_email)
+│   │       └── smtp_mailer.py             # SmtpMailer — SMTP via smtplib (envio + rascunho)
 │   └── storage/
 │       ├── uploads/                        # Uploads por operação (subpastas por UUID)
 │       ├── boletos/
@@ -194,8 +202,8 @@ Sistema_Envio_Recebiveis/
 │       └── erros/
 │
 └── frontend/
-    ├── package.json                        # Next.js 16, shadcn/ui, Lucide React
-    ├── next.config.ts                      # Proxy rewrite /api → localhost:8000
+    ├── package.json                        # Next.js 16.1.6, React 19, shadcn/ui 3.8, Lucide React
+    ├── next.config.ts                      # Proxy rewrite /api/* → localhost:5556
     ├── components.json                     # shadcn/ui config (Tailwind v4)
     ├── tsconfig.json
     ├── src/
@@ -205,20 +213,21 @@ Sistema_Envio_Recebiveis/
     │   │   ├── login/
     │   │   │   └── page.tsx                # Tela login (JWT → localStorage)
     │   │   └── (dashboard)/
-    │   │       ├── layout.tsx              # Sidebar autenticada (5 links)
+    │   │       ├── layout.tsx              # Sidebar autenticada (6 links)
     │   │       ├── page.tsx                # Dashboard (KPIs reais + operacoes recentes)
     │   │       ├── nova-operacao/
-    │   │       │   └── page.tsx            # Wizard 3 etapas: Config → Upload → Resultado
+    │   │       │   └── page.tsx            # Megatela: Config → Upload → Processamento → Resultado
     │   │       ├── historico/
     │   │       │   └── page.tsx            # Listagem paginada com filtros FIDC/status
     │   │       ├── auditoria/
     │   │       │   └── page.tsx            # Busca global: search + date range + FIDC/status
-    │   │       ├── operacoes/
-    │   │       │   └── [id]/
-    │   │       │       └── page.tsx        # Detalhe: KPIs, tabs boletos/XMLs/Envio, 5 camadas
     │   │       └── configuracao/
-    │   │           └── fidcs/
-    │   │               └── page.tsx        # Cards FIDC com edicao de CC emails
+    │   │           ├── fidcs/
+    │   │           │   └── page.tsx        # Cards FIDC com edicao de CC emails
+    │   │           └── email/
+    │   │               └── page.tsx        # Layouts de email: CRUD até 3, SMTP status/test
+    │   ├── contexts/
+    │   │   └── operation-tabs.tsx          # Multi-aba operações (max 10, persistente)
     │   ├── components/
     │   │   ├── file-dropzone.tsx           # Drag-and-drop com preview
     │   │   └── ui/                         # shadcn/ui: button, input, label, card, badge, table,
@@ -236,7 +245,7 @@ Sistema_Envio_Recebiveis/
 
 ### Opção 1: Script automático
 ```bat
-start_system.bat    :: Inicia Docker + migrations + seed + backend + frontend
+start_system.bat    :: Inicia Docker + migrations + seed + backend(5556) + frontend(5555) + LAN IP
 stop_system.bat     :: Para tudo
 ```
 
@@ -252,33 +261,44 @@ venv\Scripts\activate
 pip install -r requirements.txt              # Apenas primeira vez
 alembic upgrade head                         # Migrations
 python -m app.seed                           # Seed (4 FIDCs + admin)
-uvicorn main:app --reload --port 8000
+uvicorn main:app --reload --port 5556
 
 # 3. Frontend (Next.js)
 cd frontend
 npm install                                  # Apenas primeira vez
-npm run dev                                  # http://localhost:3000
+npm run dev                                  # http://localhost:5555
 ```
 
 ### Credenciais de desenvolvimento
 - **Login:** `admin@jotajota.net.br` / `admin123`
-- **API Docs:** http://localhost:8000/api/docs
-- **Frontend:** http://localhost:3000
+- **API Docs:** http://localhost:5556/api/docs
+- **Frontend:** http://localhost:5555
 
 ---
 
 ## 5. STATUS GERAL
 
-### Projeto COMPLETO (M1-M7)
+### Projeto COMPLETO (M1-M7) — Em uso produção (rede local)
 
 Todas as fases de desenvolvimento foram concluidas com sucesso.
-O sistema esta funcional e pronto para uso em producao.
+O sistema esta funcional e em uso na rede local.
+
+**Últimos commits:**
+- `5a11546` fix: corrigir edição de emails de XMLs na tela de upload
+- `1baa72f` chore: adicionar .claude/ e nul ao .gitignore
+- `87cd228` fix: anexar NF em PDF no email SMTP ao confirmar envio
+- `40bf9e3` CORS permissivo para acesso via rede local
+- `6fec35b` preview completo do rascunho: assinatura visivel, anexos PDF com auth
+- `4cd5a48` substituir Outlook COM por SMTP exclusivo para envio de emails
+
+**Bugs corrigidos recentemente:**
+- **Bug #07:** Edição de emails de XMLs — auto-inclusão de email pendente no input ao salvar, functional updaters, state batching, re-fetch completo após PATCH
 
 **Melhorias opcionais futuras:**
-
-1. **Testes E2E** — Cobertura automatizada de fluxo completo
-2. **Documentacao de usuario** — Guia de uso com screenshots
-3. **Monitoramento** — Logs centralizados, alertas
+1. **Refatoração** — `nova-operacao/page.tsx` (~2900 linhas) em sub-componentes
+2. **Testes automatizados** — Cobertura E2E de fluxo completo
+3. **Documentacao de usuario** — Guia de uso com screenshots
+4. **Segurança para internet** — Restringir CORS, JWT_SECRET_KEY forte, SSL/TLS, rate limiting
 
 ---
 
@@ -288,15 +308,18 @@ O sistema esta funcional e pronto para uso em producao.
 |---------|-------|--------|
 | Tailwind CSS | v4 (CSS-first) | `@theme inline` em `globals.css`, SEM `tailwind.config.ts` |
 | shadcn/ui | v3.8+ | Auto-detecta Tailwind v4 |
-| Next.js | 16 (App Router) | `next.config.ts` (TypeScript) |
+| Next.js | 16.1.6 (App Router) | `next.config.ts` (TypeScript) |
+| React | 19 | Automatic batching, concurrent features |
 | Fontes | DM Sans + Barlow Condensed | via `next/font/google` |
-| API Proxy | Next.js rewrites | `/api/*` → `localhost:8000` |
+| API Proxy | Next.js rewrites | `/api/*` → `localhost:5556` |
 | DB Driver | asyncpg | SQLAlchemy 2.x async |
+| Email | SMTP (smtplib) | Substituiu Outlook COM (pywin32 removido) |
 | Encoding | Evitar ≥ em mensagens | Windows cp1252 não suporta Unicode math |
 | Upload | FormData direto | Não usar `apiFetch` wrapper (não suporta multipart) |
 | Valor tolerance | 0 centavos | Zero tolerância — regra de negócio inviolável |
 | Fuzzy match | 85% (SequenceMatcher) | Camada 3 — warning only, nunca bloqueia |
 | Max emails | 2 por cliente | 2º email descartado se > 100 chars |
+| Tabs | Max 10 | Contexto de operação persistente via React Context |
 
 ---
 

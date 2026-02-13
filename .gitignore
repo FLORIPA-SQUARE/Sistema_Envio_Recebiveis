@@ -47,3 +47,9 @@ pgdata/
 
 # Logs
 *.log
+
+# Claude Code
+.claude/
+
+# Windows artifacts
+nul

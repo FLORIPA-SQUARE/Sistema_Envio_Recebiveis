@@ -313,6 +313,8 @@ function OperationEditor({ tabId }: { tabId: string }) {
   const [editEmailsList, setEditEmailsList] = useState<string[]>([]);
   const [editEmailInput, setEditEmailInput] = useState("");
   const [savingEmails, setSavingEmails] = useState(false);
+  const [editingEmailIdx, setEditingEmailIdx] = useState<number | null>(null);
+  const [editingEmailValue, setEditingEmailValue] = useState("");
 
   // Document preview state
   const [expandedUploadBoleto, setExpandedUploadBoleto] = useState<string | null>(null);
@@ -558,36 +560,100 @@ function OperationEditor({ tabId }: { tabId: string }) {
     setEditingXmlId(xml.id);
     setEditEmailsList([...xml.emails, ...xml.emails_invalidos]);
     setEditEmailInput("");
+    setEditingEmailIdx(null);
+    setEditingEmailValue("");
   }
 
   function addEmailToList() {
     const trimmed = editEmailInput.trim();
-    if (trimmed && !editEmailsList.includes(trimmed)) {
-      setEditEmailsList([...editEmailsList, trimmed]);
-      setEditEmailInput("");
-    }
+    if (!trimmed) return;
+    setEditEmailsList((prev) => {
+      if (prev.includes(trimmed)) {
+        console.log("[email-edit] Email duplicado, ignorando:", trimmed);
+        return prev;
+      }
+      console.log("[email-edit] Adicionando email:", trimmed, "lista atual:", prev);
+      return [...prev, trimmed];
+    });
+    setEditEmailInput("");
   }
 
   function removeEmailFromList(email: string) {
-    setEditEmailsList(editEmailsList.filter((e) => e !== email));
+    setEditEmailsList((prev) => prev.filter((e) => e !== email));
+  }
+
+  function startEditSingleEmail(idx: number, email: string) {
+    setEditingEmailIdx(idx);
+    setEditingEmailValue(email);
+  }
+
+  function confirmEditSingleEmail() {
+    const trimmed = editingEmailValue.trim();
+    if (!trimmed || editingEmailIdx === null) return;
+    if (editEmailsList.some((e, i) => i !== editingEmailIdx && e === trimmed)) {
+      toast.error("Email duplicado");
+      return;
+    }
+    setEditEmailsList((prev) =>
+      prev.map((e, i) => (i === editingEmailIdx ? trimmed : e))
+    );
+    setEditingEmailIdx(null);
+    setEditingEmailValue("");
+  }
+
+  function cancelEditSingleEmail() {
+    setEditingEmailIdx(null);
+    setEditingEmailValue("");
   }
 
   async function handleSaveEmails() {
     if (!operacaoId || !editingXmlId) return;
+
+    // Auto-incluir email pendente no input antes de salvar
+    const emailsToSave = [...editEmailsList];
+    const pendingEmail = editEmailInput.trim();
+    if (pendingEmail && !emailsToSave.includes(pendingEmail)) {
+      emailsToSave.push(pendingEmail);
+    }
+
     setSavingEmails(true);
     try {
-      const updated = await apiFetch<XmlResumo>(
+      console.log("[email-edit] Saving emails:", emailsToSave);
+      console.log("[email-edit] XML ID:", editingXmlId);
+
+      await apiFetch(
         `/operacoes/${operacaoId}/xmls/${editingXmlId}/emails`,
         {
           method: "PATCH",
-          body: JSON.stringify({ emails: editEmailsList }),
+          body: JSON.stringify({ emails: emailsToSave }),
         }
       );
-      setUploadedXmls((prev) =>
-        prev.map((x) => (x.id === editingXmlId ? updated : x))
-      );
+      console.log("[email-edit] PATCH success");
+
+      // Re-fetch operação completa para garantir sincronização do state
+      const op = await apiFetch<OperacaoDetalhada>(`/operacoes/${operacaoId}`);
+      const editedXml = op.xmls.find((x) => x.id === editingXmlId);
+      console.log("[email-edit] Re-fetched XML emails:", editedXml?.emails);
+      console.log("[email-edit] Re-fetched XML emails_invalidos:", editedXml?.emails_invalidos);
+      console.log("[email-edit] Total XMLs returned:", op.xmls.length);
+
+      // CRITICAL: Todos os state updates no mesmo bloco síncrono
+      // Sem await entre eles = React batcha em um único render
+      setUploadedXmls(op.xmls);
       setEditingXmlId(null);
-      toast.success("Emails atualizados");
+      setEditingEmailIdx(null);
+      setEditingEmailValue("");
+      setEditEmailsList([]);
+      setEditEmailInput("");
+
+      toast.success(`Emails salvos: ${editedXml?.emails.length || 0} valido(s), ${editedXml?.emails_invalidos.length || 0} invalido(s)`);
+
+      // Preview-envio: fire-and-forget (não bloqueia o fluxo principal)
+      if (envioPreview) {
+        apiFetch<PreviewEnvioResponse>(`/operacoes/${operacaoId}/preview-envio`)
+          .then(setEnvioPreview)
+          .catch(() => {});
+      }
     } catch {
       toast.error("Erro ao salvar emails");
     } finally {
@@ -1402,7 +1468,6 @@ function OperationEditor({ tabId }: { tabId: string }) {
                 </Button>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1448,24 +1513,41 @@ function OperationEditor({ tabId }: { tabId: string }) {
                           <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
                             {xml.cnpj || "—"}
                           </TableCell>
-                          <TableCell onClick={(e) => e.stopPropagation()}>
+                          <TableCell onClick={(e) => e.stopPropagation()} className="whitespace-normal min-w-[180px]">
                             {editingXmlId === xml.id ? (
                               <div className="space-y-2 min-w-[220px]">
                                 <div className="flex flex-wrap gap-1">
-                                  {editEmailsList.map((email) => (
-                                    <span
-                                      key={email}
-                                      className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs"
-                                    >
-                                      {email}
-                                      <button
-                                        type="button"
-                                        onClick={() => removeEmailFromList(email)}
-                                        className="text-muted-foreground hover:text-destructive"
+                                  {editEmailsList.map((email, idx) => (
+                                    editingEmailIdx === idx ? (
+                                      <Input
+                                        key={`edit-${idx}`}
+                                        autoFocus
+                                        value={editingEmailValue}
+                                        onChange={(e) => setEditingEmailValue(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") { e.preventDefault(); confirmEditSingleEmail(); }
+                                          if (e.key === "Escape") { cancelEditSingleEmail(); }
+                                        }}
+                                        onBlur={confirmEditSingleEmail}
+                                        className="h-6 text-xs w-48"
+                                      />
+                                    ) : (
+                                      <span
+                                        key={email}
+                                        className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs cursor-pointer hover:bg-muted/80"
+                                        onDoubleClick={() => startEditSingleEmail(idx, email)}
+                                        title="Duplo-clique para editar"
                                       >
-                                        <XCircle className="h-3 w-3" />
-                                      </button>
-                                    </span>
+                                        {email}
+                                        <button
+                                          type="button"
+                                          onClick={() => removeEmailFromList(email)}
+                                          className="text-muted-foreground hover:text-destructive"
+                                        >
+                                          <XCircle className="h-3 w-3" />
+                                        </button>
+                                      </span>
+                                    )
                                   ))}
                                 </div>
                                 <div className="flex gap-1">
@@ -1569,7 +1651,6 @@ function OperationEditor({ tabId }: { tabId: string }) {
                     ))}
                   </TableBody>
                 </Table>
-                </div>
               </CardContent>
             </Card>
           )}

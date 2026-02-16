@@ -331,3 +331,37 @@ O sistema esta funcional e em uso na rede local.
 | NOVAX | 28.879.551/0001-96 | #107c10 | adm@jotajota.net.br, controladoria@novaxfidc.com.br |
 | CREDVALE | — | #d83b01 | adm@jotajota.net.br, nichole@credvalefidc.com.br |
 | SQUID | — | #8764b8 | adm@jotajota.net.br |
+
+---
+
+## 8. VERSIONAMENTO
+
+### Versao Atual: 1.1.0
+
+O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
+- **MAJOR** (X.0.0): Mudancas incompativeis (schema DB, API breaking changes)
+- **MINOR** (0.X.0): Novas funcionalidades retrocompativeis
+- **PATCH** (0.0.X): Correcoes de bugs
+
+### Arquivos de Referencia
+| Arquivo | Proposito |
+|---------|-----------|
+| `VERSION` (raiz) | Fonte unica de verdade para a versao |
+| `CHANGELOG.md` (raiz) | Historico detalhado de alteracoes por versao |
+| `frontend/src/components/version-dialog.tsx` | Changelog inline exibido na UI |
+| `CLAUDE.md` (raiz) | Regra obrigatoria de atualizacao a cada commit |
+
+### Como Atualizar a Versao
+1. Editar `VERSION` com o novo numero (ex: `1.2.0`)
+2. Adicionar entrada no `CHANGELOG.md`
+3. Atualizar `CHANGELOG_ENTRIES` em `frontend/src/components/version-dialog.tsx`
+4. Atualizar `version` em `frontend/package.json`
+5. Atualizar a **Versao Atual** nesta secao e no `CLAUDE.md`
+6. Commit: `release: vX.Y.Z`
+7. Tag: `git tag -a vX.Y.Z -m "vX.Y.Z: descricao" && git push origin vX.Y.Z`
+
+### Tags Git
+| Tag | Commit | Data | Descricao |
+|-----|--------|------|-----------|
+| v1.0.0 | e3ff63b | 2026-02-13 | Primeira versao completa (M1-M7) |
+| v1.1.0 | — | 2026-02-16 | Indicador de historico de versoes (#A06) |

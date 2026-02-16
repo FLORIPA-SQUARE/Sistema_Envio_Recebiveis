@@ -25,6 +25,7 @@ import {
   OperationTabsProvider,
   useOperationTabs,
 } from "@/contexts/operation-tabs";
+import { VersionBadge } from "@/components/version-dialog";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -183,6 +184,9 @@ export default function DashboardLayout({
             <LogOut className="h-4 w-4" />
             Sair
           </Button>
+          <div className="mt-3 flex justify-center">
+            <VersionBadge />
+          </div>
         </div>
       </>
     );

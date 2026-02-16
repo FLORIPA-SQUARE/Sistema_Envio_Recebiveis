@@ -62,5 +62,25 @@ Seu trabalho deve seguir esta ordem. Não pule etapas.
 * Para rodar frontend (dev): `npm run dev`
 * Para rodar banco: `docker-compose up -d`
 
----
-**Próximo passo:** Comece executando a **FASE 1**. Analise o PRD, crie a estrutura de diretórios e os arquivos de configuração iniciais. Me peça confirmação antes de escrever o código.
+## 7. Controle de Versão
+
+**Versão Atual: v1.1.0**
+
+> **REGRA OBRIGATÓRIA:** A cada commit realizado (adição, correção ou reformulação),
+> o agente/desenvolvedor DEVE:
+> 1. Atualizar o número da versão no arquivo `VERSION` (raiz)
+> 2. Adicionar entrada no `CHANGELOG.md` descrevendo a alteração
+> 3. Atualizar o array `CHANGELOG_ENTRIES` em `frontend/src/components/version-dialog.tsx`
+> 4. Atualizar `"version"` em `frontend/package.json`
+> 5. Atualizar a **Versão Atual** nesta seção do CLAUDE.md
+> 6. Criar tag git: `git tag -a vX.Y.Z -m "vX.Y.Z: descricao"`
+
+**Convenção Semantic Versioning:**
+- **PATCH** (0.0.X): Correções de bugs
+- **MINOR** (0.X.0): Novas funcionalidades retrocompatíveis
+- **MAJOR** (X.0.0): Mudanças incompatíveis (schema DB, API breaking)
+
+**Arquivos de referência:**
+- `VERSION` — fonte única de verdade
+- `CHANGELOG.md` — histórico completo
+- `docs/_ESTADO_ATUAL_PROJETO.md` — seção 8 (Versionamento)

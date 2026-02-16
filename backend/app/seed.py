@@ -54,11 +54,18 @@ FIDCS_SEED = [
     },
 ]
 
-DEFAULT_USER = {
-    "nome": "Administrador",
-    "email": "admin@jotajota.net.br",
-    "senha": "admin123",
-}
+USERS_SEED = [
+    {
+        "nome": "Administrador",
+        "email": "admin@jotajota.net.br",
+        "senha": "admin123",
+    },
+    {
+        "nome": "Camila",
+        "email": "camila@jotajota.net.br",
+        "senha": "acessoJJcamila26",
+    },
+]
 
 
 async def seed():
@@ -73,20 +80,21 @@ async def seed():
             else:
                 print(f"  [=] FIDC já existe: {fidc_data['nome']}")
 
-        # Seed default user
-        result = await session.execute(select(Usuario).where(Usuario.email == DEFAULT_USER["email"]))
-        existing_user = result.scalar_one_or_none()
-        if not existing_user:
-            session.add(
-                Usuario(
-                    nome=DEFAULT_USER["nome"],
-                    email=DEFAULT_USER["email"],
-                    senha_hash=hash_password(DEFAULT_USER["senha"]),
+        # Seed users
+        for user_data in USERS_SEED:
+            result = await session.execute(select(Usuario).where(Usuario.email == user_data["email"]))
+            existing_user = result.scalar_one_or_none()
+            if not existing_user:
+                session.add(
+                    Usuario(
+                        nome=user_data["nome"],
+                        email=user_data["email"],
+                        senha_hash=hash_password(user_data["senha"]),
+                    )
                 )
-            )
-            print(f"  [+] Usuário criado: {DEFAULT_USER['email']}")
-        else:
-            print(f"  [=] Usuário já existe: {DEFAULT_USER['email']}")
+                print(f"  [+] Usuário criado: {user_data['email']}")
+            else:
+                print(f"  [=] Usuário já existe: {user_data['email']}")
 
         # Seed default email layout
         result = await session.execute(select(EmailLayout).where(EmailLayout.nome == "Padrao"))

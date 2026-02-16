@@ -64,7 +64,7 @@ Seu trabalho deve seguir esta ordem. Não pule etapas.
 
 ## 7. Controle de Versão
 
-**Versão Atual: v1.4.0**
+**Versão Atual: v1.5.0**
 
 > **REGRA OBRIGATÓRIA:** A cada commit realizado (adição, correção ou reformulação),
 > o agente/desenvolvedor DEVE:
@@ -79,6 +79,10 @@ Seu trabalho deve seguir esta ordem. Não pule etapas.
 - **PATCH** (0.0.X): Correções de bugs
 - **MINOR** (0.X.0): Novas funcionalidades retrocompatíveis
 - **MAJOR** (X.0.0): Mudanças incompatíveis (schema DB, API breaking)
+
+**IMPORTANTE — Ordem de atualização de versão:**
+> Sempre atualizar o arquivo `VERSION` **ANTES** de reiniciar backend e frontend,
+> pois ambos leem o VERSION apenas no startup (backend em `main.py`, frontend em `next.config.ts`).
 
 **Arquivos de referência:**
 - `VERSION` — fonte única de verdade

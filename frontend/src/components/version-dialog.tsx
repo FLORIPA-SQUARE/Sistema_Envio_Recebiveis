@@ -20,6 +20,17 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.5.0",
+    date: "2026-02-16",
+    summary: "Explorador financeiro (#A02)",
+    items: [
+      "Grafico de barras interativo no Dashboard (recharts)",
+      "Valores bruto e liquido agregados por dia, semana ou mes",
+      "Filtros por data, FIDC e status com totais do periodo",
+      "Endpoint GET /operacoes/dashboard/valores para agregacao",
+    ],
+  },
+  {
     version: "1.4.0",
     date: "2026-02-16",
     summary: "Auditoria do banco de dados (#A05)",

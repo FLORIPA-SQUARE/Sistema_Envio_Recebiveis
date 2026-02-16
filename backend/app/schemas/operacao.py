@@ -224,6 +224,24 @@ class PreviewEnvioResponse(BaseModel):
     grupos: list[PreviewEnvioGrupo]
 
 
+# ── Valores agregados (Explorer) schemas ─────────────────
+
+
+class ValoresAgregadoItem(BaseModel):
+    periodo: str
+    periodo_label: str
+    valor_bruto: float
+    valor_liquido: float
+    count: int
+
+
+class ValoresAgregadoResponse(BaseModel):
+    items: list[ValoresAgregadoItem]
+    total_bruto: float
+    total_liquido: float
+    total_operacoes: int
+
+
 # ── Atividade (audit trail) schemas ────────────────────────
 
 

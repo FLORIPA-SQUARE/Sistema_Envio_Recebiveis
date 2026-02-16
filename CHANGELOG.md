@@ -5,6 +5,15 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.5.0] - 2026-02-16
+
+### Adicionado
+- Explorador financeiro no Dashboard com grafico de barras interativo (#A02)
+- Endpoint GET /operacoes/dashboard/valores para agregacao de valores por periodo
+- Filtros por data inicio/fim, agrupamento (dia/semana/mes), FIDC e status
+- Totais de valor bruto, valor liquido e contagem de operacoes no periodo
+- Biblioteca recharts para visualizacao de dados
+
 ## [1.4.0] - 2026-02-16
 
 ### Adicionado

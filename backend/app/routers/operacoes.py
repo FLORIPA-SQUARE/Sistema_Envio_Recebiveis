@@ -6,6 +6,7 @@ Endpoints:
   PATCH  /operacoes/{id}                 — Atualizar operacao (FIDC, numero)
   GET    /operacoes                      — Listar (paginado)
   GET    /operacoes/dashboard/stats      — KPIs agregados
+  GET    /operacoes/dashboard/valores   — Valores agregados por periodo
   GET    /operacoes/{id}                 — Detalhes com boletos + XMLs
   DELETE /operacoes/{id}                 — Excluir operacao e dados relacionados
   POST   /operacoes/{id}/boletos/upload  — Upload PDFs (multipart + auto-split)
@@ -31,11 +32,11 @@ import logging
 import shutil
 import uuid
 import zipfile
-from datetime import datetime, timezone
+from datetime import date as date_type, datetime, timedelta, timezone
 from pathlib import Path
 
 import pdfplumber
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -72,6 +73,8 @@ from app.schemas.operacao import (
     OperacaoResponse,
     OperacoesPaginadas,
     ValorLiquidoUpdate,
+    ValoresAgregadoItem,
+    ValoresAgregadoResponse,
     AtividadeItem,
     AtividadeResponse,
     PreviewEnvioGrupo,
@@ -309,6 +312,100 @@ async def dashboard_stats(
         total_rejeitados=total_rejeitados,
         taxa_sucesso_global=round(taxa, 2),
         operacoes_recentes=recentes_resp,
+    )
+
+
+# ── GET /operacoes/dashboard/valores ──────────────────────
+
+
+@router.get("/dashboard/valores", response_model=ValoresAgregadoResponse)
+async def dashboard_valores(
+    data_inicio: date_type | None = Query(None, description="Data inicio (YYYY-MM-DD)"),
+    data_fim: date_type | None = Query(None, description="Data fim (YYYY-MM-DD)"),
+    agrupamento: str = Query("mes", description="dia | semana | mes"),
+    fidc_id: str | None = Query(None, description="Filtro por FIDC"),
+    status_filter: str | None = Query(None, description="Filtro por status"),
+    db: AsyncSession = Depends(get_db),
+    _current_user: Usuario = Depends(get_current_user),
+):
+    """Valores bruto/liquido agregados por periodo (dia, semana, mes)."""
+    if not data_fim:
+        data_fim = date_type.today()
+    if not data_inicio:
+        data_inicio = data_fim - timedelta(days=180)
+
+    trunc_map = {"dia": "day", "semana": "week", "mes": "month"}
+    pg_trunc = trunc_map.get(agrupamento)
+    if not pg_trunc:
+        raise HTTPException(
+            status_code=400,
+            detail="agrupamento deve ser: dia, semana ou mes",
+        )
+
+    dt_inicio = datetime.combine(data_inicio, datetime.min.time())
+    dt_fim = datetime.combine(data_fim, datetime.max.time())
+
+    periodo_col = func.date_trunc(pg_trunc, Operacao.created_at).label("periodo")
+
+    query = (
+        select(
+            periodo_col,
+            func.coalesce(func.sum(Operacao.valor_bruto), 0.0).label("valor_bruto"),
+            func.coalesce(func.sum(Operacao.valor_liquido), 0.0).label("valor_liquido"),
+            func.count(Operacao.id).label("count"),
+        )
+        .where(Operacao.created_at >= dt_inicio)
+        .where(Operacao.created_at <= dt_fim)
+    )
+
+    if fidc_id:
+        query = query.where(Operacao.fidc_id == fidc_id)
+    if status_filter:
+        query = query.where(Operacao.status == status_filter)
+
+    query = query.group_by(periodo_col).order_by(periodo_col)
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    items = []
+    total_bruto = 0.0
+    total_liquido = 0.0
+    total_ops = 0
+
+    for row in rows:
+        periodo_dt = row.periodo
+        vb = float(row.valor_bruto)
+        vl = float(row.valor_liquido)
+        cnt = int(row.count)
+
+        if agrupamento == "mes":
+            periodo_str = periodo_dt.strftime("%Y-%m")
+            periodo_label = periodo_dt.strftime("%b/%Y").capitalize()
+        elif agrupamento == "semana":
+            iso_cal = periodo_dt.isocalendar()
+            periodo_str = f"{iso_cal.year}-W{iso_cal.week:02d}"
+            periodo_label = f"Sem {iso_cal.week:02d}"
+        else:
+            periodo_str = periodo_dt.strftime("%Y-%m-%d")
+            periodo_label = periodo_dt.strftime("%d/%m/%Y")
+
+        items.append(ValoresAgregadoItem(
+            periodo=periodo_str,
+            periodo_label=periodo_label,
+            valor_bruto=round(vb, 2),
+            valor_liquido=round(vl, 2),
+            count=cnt,
+        ))
+        total_bruto += vb
+        total_liquido += vl
+        total_ops += cnt
+
+    return ValoresAgregadoResponse(
+        items=items,
+        total_bruto=round(total_bruto, 2),
+        total_liquido=round(total_liquido, 2),
+        total_operacoes=total_ops,
     )
 
 

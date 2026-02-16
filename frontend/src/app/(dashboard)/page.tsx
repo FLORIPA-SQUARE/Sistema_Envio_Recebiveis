@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { useOperationTabs } from "@/contexts/operation-tabs";
+import { ValoresExplorer } from "@/components/valores-explorer";
 import {
   Card,
   CardContent,
@@ -174,6 +175,9 @@ export default function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      {/* Explorador Financeiro */}
+      <ValoresExplorer />
 
       {/* Operacoes Recentes */}
       <Card>

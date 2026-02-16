@@ -1,7 +1,7 @@
 # ESTADO ATUAL DO PROJETO — Sistema Automação Envio de Boletos
 
-> **Ultima atualizacao:** 2026-02-13
-> **Sessao:** Implementacao M1 + M2 + M3 + M4 + M5 + M6 + M7
+> **Ultima atualizacao:** 2026-02-16
+> **Sessao:** Implementacao M1-M7 + Aprimoramentos A01, A06
 > **Fonte de verdade:** `docs/prd/PRD-001-Especificacao.md`
 
 ---
@@ -123,7 +123,9 @@ Sistema_Envio_Recebiveis/
 ├── docker-compose.yml                      # PostgreSQL 16 Alpine APENAS
 ├── start_system.bat                        # Inicia Docker + Backend(5556) + Frontend(5555)
 ├── stop_system.bat                         # Para tudo
-├── CLAUDE.md                               # Instruções do projeto
+├── CLAUDE.md                               # Instruções do projeto + regra de versionamento
+├── VERSION                                 # Fonte unica de verdade para versao (1.2.0)
+├── CHANGELOG.md                            # Historico de alteracoes por versao
 │
 ├── docs/
 │   ├── prd/
@@ -140,7 +142,7 @@ Sistema_Envio_Recebiveis/
 │
 ├── backend/
 │   ├── requirements.txt                    # FastAPI, SQLAlchemy, PyPDF2, pdfplumber
-│   ├── main.py                             # Entry: 5 routers, CORS, static assets, port 5556
+│   ├── main.py                             # Entry: 6 routers, CORS, static assets, port 5556
 │   ├── alembic.ini
 │   ├── alembic/
 │   │   ├── env.py                          # Async migration config
@@ -168,13 +170,14 @@ Sistema_Envio_Recebiveis/
 │   │   │   ├── fidc.py                     # FidcResponse, FidcUpdate
 │   │   │   ├── operacao.py                 # OperacaoCreate/Response/Detalhada, Upload/Process/Envio results
 │   │   │   └── auditoria.py               # AuditoriaItem + AuditoriaBuscarResponse
-│   │   ├── routers/                        # 5 routers, 38 endpoints
+│   │   ├── routers/                        # 6 routers, 39 endpoints
 │   │   │   ├── __init__.py
 │   │   │   ├── auth.py                     # POST /auth/login, GET /auth/me (2)
 │   │   │   ├── fidcs.py                    # GET /fidcs, PUT /fidcs/{id} (2)
 │   │   │   ├── operacoes.py               # 26 endpoints: CRUD, upload, processar, enviar, emails, relatorio
 │   │   │   ├── auditoria.py              # GET /auditoria/buscar (1)
-│   │   │   └── email_layout.py           # CRUD layouts, ativar, smtp-status, smtp-test (7)
+│   │   │   ├── email_layout.py           # CRUD layouts, ativar, smtp-status, smtp-test (7)
+│   │   │   └── version.py                # GET /version (1)
 │   │   ├── extractors/                     # 9 extractors
 │   │   │   ├── __init__.py                 # Re-exporta tudo
 │   │   │   ├── base.py                     # BaseExtractor (ABC) + helpers compartilhados
@@ -230,6 +233,7 @@ Sistema_Envio_Recebiveis/
     │   │   └── operation-tabs.tsx          # Multi-aba operações (max 10, persistente)
     │   ├── components/
     │   │   ├── file-dropzone.tsx           # Drag-and-drop com preview
+    │   │   ├── version-dialog.tsx          # Badge de versao + dialog changelog (#A06)
     │   │   └── ui/                         # shadcn/ui: button, input, label, card, badge, table,
     │   │                                   #            dialog, sonner, select, progress, separator,
     │   │                                   #            scroll-area, tabs, sheet
@@ -278,27 +282,31 @@ npm run dev                                  # http://localhost:5555
 
 ## 5. STATUS GERAL
 
-### Projeto COMPLETO (M1-M7) — Em uso produção (rede local)
+### Projeto COMPLETO (M1-M7) + Aprimoramentos — Em uso producao (rede local)
 
 Todas as fases de desenvolvimento foram concluidas com sucesso.
-O sistema esta funcional e em uso na rede local.
+O sistema esta funcional e em uso na rede local. Versao atual: **v1.2.0**.
 
-**Últimos commits:**
-- `5a11546` fix: corrigir edição de emails de XMLs na tela de upload
-- `1baa72f` chore: adicionar .claude/ e nul ao .gitignore
+**Ultimos commits:**
+- `ec6ddcd` feat: saudacao automatica por horario no email (#A01) — **v1.2.0**
+- `ac19866` feat: adicionar indicador de historico de versoes (#A06) — **v1.1.0**
+- `e3ff63b` docs: atualizar estado atual do projeto com correcoes recentes
+- `5a11546` fix: corrigir edicao de emails de XMLs na tela de upload
 - `87cd228` fix: anexar NF em PDF no email SMTP ao confirmar envio
 - `40bf9e3` CORS permissivo para acesso via rede local
-- `6fec35b` preview completo do rascunho: assinatura visivel, anexos PDF com auth
-- `4cd5a48` substituir Outlook COM por SMTP exclusivo para envio de emails
+
+**Aprimoramentos implementados (pos M7):**
+- **#A06 (v1.1.0):** Indicador de historico de versoes — badge na sidebar, dialog com changelog, endpoint GET /version, arquivo VERSION, CHANGELOG.md, regra obrigatoria no CLAUDE.md
+- **#A01 (v1.2.0):** Saudacao automatica por horario — Bom dia (0h-12h), Boa tarde (13h-18h), Boa noite (19h-23h). Campo read-only na configuracao de email, saudacao determinada pela hora do servidor no momento do envio
 
 **Bugs corrigidos recentemente:**
-- **Bug #07:** Edição de emails de XMLs — auto-inclusão de email pendente no input ao salvar, functional updaters, state batching, re-fetch completo após PATCH
+- **Bug #07:** Edicao de emails de XMLs — auto-inclusao de email pendente no input ao salvar, functional updaters, state batching, re-fetch completo apos PATCH
 
 **Melhorias opcionais futuras:**
-1. **Refatoração** — `nova-operacao/page.tsx` (~2900 linhas) em sub-componentes
+1. **Refatoracao** — `nova-operacao/page.tsx` (~2900 linhas) em sub-componentes
 2. **Testes automatizados** — Cobertura E2E de fluxo completo
 3. **Documentacao de usuario** — Guia de uso com screenshots
-4. **Segurança para internet** — Restringir CORS, JWT_SECRET_KEY forte, SSL/TLS, rate limiting
+4. **Seguranca para internet** — Restringir CORS, JWT_SECRET_KEY forte, SSL/TLS, rate limiting
 
 ---
 
@@ -320,6 +328,8 @@ O sistema esta funcional e em uso na rede local.
 | Fuzzy match | 85% (SequenceMatcher) | Camada 3 — warning only, nunca bloqueia |
 | Max emails | 2 por cliente | 2º email descartado se > 100 chars |
 | Tabs | Max 10 | Contexto de operação persistente via React Context |
+| Saudacao email | Automatica por horario | Bom dia (0-12h), Boa tarde (13-18h), Boa noite (19-23h) |
+| Versionamento | Semantic Versioning | Arquivo `VERSION` na raiz, tags git, CHANGELOG.md |
 
 ---
 
@@ -336,7 +346,7 @@ O sistema esta funcional e em uso na rede local.
 
 ## 8. VERSIONAMENTO
 
-### Versao Atual: 1.1.0
+### Versao Atual: 1.2.0
 
 O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 - **MAJOR** (X.0.0): Mudancas incompativeis (schema DB, API breaking changes)
@@ -364,4 +374,5 @@ O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 | Tag | Commit | Data | Descricao |
 |-----|--------|------|-----------|
 | v1.0.0 | e3ff63b | 2026-02-13 | Primeira versao completa (M1-M7) |
-| v1.1.0 | — | 2026-02-16 | Indicador de historico de versoes (#A06) |
+| v1.1.0 | ac19866 | 2026-02-16 | Indicador de historico de versoes (#A06) |
+| v1.2.0 | ec6ddcd | 2026-02-16 | Saudacao automatica por horario (#A01) |

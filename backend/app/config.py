@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://boletos_user:boletos_dev_2026@localhost:5432/boletos_db"
 
-    # JWT
-    JWT_SECRET_KEY: str = "change-me"
+    # JWT (obrigatório — definir no .env)
+    JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_HOURS: int = 8
 

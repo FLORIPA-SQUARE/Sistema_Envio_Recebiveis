@@ -1,9 +1,14 @@
-"""Seed script — populates 4 FIDCs and 1 default user.
+"""Seed script — populates 4 FIDCs and default users.
 
 Run: python -m app.seed  (from backend/ directory)
+
+Senhas de usuarios: definir via variavel de ambiente ou serao geradas automaticamente.
+  SEED_ADMIN_PASSWORD=...  SEED_CAMILA_PASSWORD=...  python -m app.seed
 """
 
 import asyncio
+import os
+import secrets
 import sys
 from pathlib import Path
 
@@ -18,6 +23,17 @@ from app.models.email_layout import EmailLayout
 from app.models.fidc import Fidc
 from app.models.usuario import Usuario
 from app.security import hash_password
+
+
+def _get_password(env_var: str, user_label: str) -> str:
+    """Retorna senha da env var ou gera uma aleatoria."""
+    pwd = os.environ.get(env_var)
+    if pwd:
+        return pwd
+    pwd = secrets.token_urlsafe(16)
+    print(f"  [!] {env_var} nao definida — senha gerada para {user_label}: {pwd}")
+    return pwd
+
 
 FIDCS_SEED = [
     {
@@ -58,12 +74,12 @@ USERS_SEED = [
     {
         "nome": "Administrador",
         "email": "admin@jotajota.net.br",
-        "senha": "admin123",
+        "env_var": "SEED_ADMIN_PASSWORD",
     },
     {
         "nome": "Camila",
         "email": "camila@jotajota.net.br",
-        "senha": "acessoJJcamila26",
+        "env_var": "SEED_CAMILA_PASSWORD",
     },
 ]
 
@@ -85,11 +101,12 @@ async def seed():
             result = await session.execute(select(Usuario).where(Usuario.email == user_data["email"]))
             existing_user = result.scalar_one_or_none()
             if not existing_user:
+                senha = _get_password(user_data["env_var"], user_data["email"])
                 session.add(
                     Usuario(
                         nome=user_data["nome"],
                         email=user_data["email"],
-                        senha_hash=hash_password(user_data["senha"]),
+                        senha_hash=hash_password(senha),
                     )
                 )
                 print(f"  [+] Usuário criado: {user_data['email']}")

@@ -5,6 +5,13 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.6.1] - 2026-02-16
+
+### Corrigido
+- Erro 500 ao fazer upload de boletos para FIDCs novas (sem extrator especializado)
+- Criado GenericExtractor como fallback para FIDCs que nao possuem extrator dedicado
+- Factory de extratores retorna extrator generico ao inves de lancar erro
+
 ## [1.6.0] - 2026-02-16
 
 ### Adicionado

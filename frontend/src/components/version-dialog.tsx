@@ -20,6 +20,15 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.6.1",
+    date: "2026-02-16",
+    summary: "Correcao: upload de boletos para FIDCs novas",
+    items: [
+      "Extrator generico como fallback para FIDCs sem extrator especializado",
+      "Corrigido erro 500 no upload, processamento e reprocessamento de boletos",
+    ],
+  },
+  {
     version: "1.6.0",
     date: "2026-02-16",
     summary: "CRUD de FIDCs e textos de email personalizados (#A04, #A05)",

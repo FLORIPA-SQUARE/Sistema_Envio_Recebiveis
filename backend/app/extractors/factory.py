@@ -5,11 +5,16 @@ Seleciona o extrator correto baseado em palavras-chave detectadas
 no texto do boleto PDF ou pelo FIDC escolhido na operação.
 """
 
+import logging
+
 from app.extractors.base import BaseExtractor
 from app.extractors.capital import CapitalExtractor
 from app.extractors.credvale import CredvaleExtractor
+from app.extractors.generic import GenericExtractor
 from app.extractors.novax import NovaxExtractor
 from app.extractors.squid import SquidExtractor
+
+logger = logging.getLogger(__name__)
 
 # Mapa de palavras-chave → extrator (ordem importa: mais específico primeiro)
 _KEYWORD_MAP: list[tuple[list[str], type[BaseExtractor]]] = [
@@ -40,10 +45,8 @@ def get_extractor_by_name(nome_fidc: str) -> BaseExtractor:
     nome_upper = nome_fidc.upper().strip()
     cls = _FIDC_MAP.get(nome_upper)
     if cls is None:
-        raise ValueError(
-            f"FIDC '{nome_fidc}' não reconhecido. "
-            f"Disponíveis: {list(_FIDC_MAP.keys())}"
-        )
+        logger.info("FIDC '%s' sem extrator especializado, usando GenericExtractor", nome_fidc)
+        return GenericExtractor(nome_upper)
     return cls()
 
 

@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 class EmailLayoutCreate(BaseModel):
     nome: str
-    saudacao: str
+    saudacao: str = "auto"
     introducao: str
     mensagem_fechamento: str
     assinatura_nome: str

@@ -4,6 +4,22 @@ Email Template Builder — gera HTML do corpo do email e assunto.
 Template conforme PRD RF-008.
 """
 
+from datetime import datetime
+
+
+def _saudacao_por_horario() -> str:
+    """Retorna saudacao automatica conforme hora do dia.
+
+    Bom dia (0h-12h), Boa tarde (13h-18h), Boa noite (19h-23h).
+    """
+    hora = datetime.now().hour
+    if hora <= 12:
+        return "Bom dia,"
+    elif hora <= 18:
+        return "Boa tarde,"
+    else:
+        return "Boa noite,"
+
 
 def gerar_assunto(numeros_nf: list[str]) -> str:
     """Gera assunto do email no formato: 'Boleto e Nota Fiscal (NF1, NF2, NF3)'."""
@@ -16,7 +32,7 @@ def gerar_email_html(
     boletos_info: list[dict],
     nome_fidc_completo: str,
     cnpj_fidc: str,
-    saudacao: str = "Boa tarde,",
+    saudacao: str | None = None,
     introducao: str = "Prezado cliente,",
     mensagem_fechamento: str = "Em caso de duvidas, nossa equipe permanece a disposicao para esclarecimentos.",
     assinatura_nome: str = "Equipe de Cobranca",
@@ -28,11 +44,14 @@ def gerar_email_html(
         boletos_info: Lista de dicts com keys: numero_nota, valor_formatado, vencimento_completo
         nome_fidc_completo: Nome completo do FIDC beneficiario
         cnpj_fidc: CNPJ do FIDC formatado
-        saudacao: Saudacao inicial (ex: "Boa tarde,")
+        saudacao: Saudacao inicial — se None, usa automatica por horario
         introducao: Introducao antes do nome (ex: "Prezado cliente,")
         mensagem_fechamento: Mensagem de fechamento
         assinatura_nome: Nome da assinatura (ex: "Equipe de Cobranca")
     """
+    if saudacao is None:
+        saudacao = _saudacao_por_horario()
+
     # Lista de NFs
     nfs_lista = ", ".join(b["numero_nota"] for b in boletos_info if b.get("numero_nota"))
 

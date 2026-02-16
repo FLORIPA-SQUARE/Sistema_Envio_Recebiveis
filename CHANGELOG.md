@@ -5,6 +5,17 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.2.0] - 2026-02-16
+
+### Adicionado
+- Saudacao automatica por horario no email: Bom dia (0h-12h), Boa tarde (13h-18h), Boa noite (19h-23h) (#A01)
+- Campo saudacao na configuracao de email agora e read-only com indicacao de horarios
+
+### Alterado
+- `email_template.py`: saudacao determinada dinamicamente pela hora do servidor no momento do envio
+- `email_grouper.py`: campo saudacao do layout ignorado (sempre usa automatica)
+- Schema `EmailLayoutCreate`: campo saudacao agora opcional com default "auto"
+
 ## [1.1.0] - 2026-02-16
 
 ### Adicionado

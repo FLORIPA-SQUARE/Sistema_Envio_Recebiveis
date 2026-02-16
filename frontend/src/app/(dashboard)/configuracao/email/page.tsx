@@ -146,7 +146,7 @@ export default function EmailConfigPage() {
     try {
       const payload = {
         nome: formNome.trim(),
-        saudacao: formSaudacao,
+        saudacao: "auto",
         introducao: formIntroducao,
         mensagem_fechamento: formFechamento,
         assinatura_nome: formAssinatura,
@@ -309,7 +309,7 @@ export default function EmailConfigPage() {
               <CardContent className="space-y-3">
                 <div>
                   <span className="text-xs font-medium text-muted-foreground uppercase">Saudacao</span>
-                  <p className="text-sm">{layout.saudacao}</p>
+                  <p className="text-sm text-muted-foreground italic">Automatica conforme horario</p>
                 </div>
                 <div>
                   <span className="text-xs font-medium text-muted-foreground uppercase">Introducao</span>
@@ -372,10 +372,13 @@ export default function EmailConfigPage() {
               <div className="space-y-2">
                 <Label>Saudacao</Label>
                 <Input
-                  value={formSaudacao}
-                  onChange={(e) => setFormSaudacao(e.target.value)}
-                  placeholder="Boa tarde,"
+                  value="Automatica conforme horario do envio"
+                  disabled
+                  className="bg-muted"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Bom dia (0h-12h) · Boa tarde (13h-18h) · Boa noite (19h-23h)
+                </p>
               </div>
               <div className="space-y-2">
                 <Label>Introducao (antes do nome do cliente)</Label>
@@ -414,7 +417,7 @@ export default function EmailConfigPage() {
             <div className="space-y-2">
               <Label className="text-muted-foreground">Preview do Email</Label>
               <div className="rounded-md border bg-white p-4 text-sm space-y-3 max-h-[400px] overflow-y-auto" style={{ fontFamily: "Arial, sans-serif", fontSize: "13px", color: "#333" }}>
-                <p>{formSaudacao || "Boa tarde,"}</p>
+                <p>{new Date().getHours() <= 12 ? "Bom dia," : new Date().getHours() <= 18 ? "Boa tarde," : "Boa noite,"}</p>
                 <p>
                   {formIntroducao || "Prezado cliente,"}<br />
                   <strong>EMPRESA EXEMPLO LTDA</strong>,
@@ -445,7 +448,7 @@ export default function EmailConfigPage() {
           </DialogHeader>
           {previewLayout && (
             <div className="rounded-md border bg-white p-4 text-sm space-y-3" style={{ fontFamily: "Arial, sans-serif", fontSize: "13px", color: "#333" }}>
-              <p>{previewLayout.saudacao}</p>
+              <p>{new Date().getHours() <= 12 ? "Bom dia," : new Date().getHours() <= 18 ? "Boa tarde," : "Boa noite,"}</p>
               <p>
                 {previewLayout.introducao}<br />
                 <strong>EMPRESA EXEMPLO LTDA</strong>,

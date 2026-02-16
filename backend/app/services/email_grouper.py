@@ -146,7 +146,7 @@ def agrupar_boletos_para_envio(
         assunto = gerar_assunto(numeros_nf)
         layout_kwargs = {}
         if email_layout:
-            for k in ("saudacao", "introducao", "mensagem_fechamento", "assinatura_nome"):
+            for k in ("introducao", "mensagem_fechamento", "assinatura_nome"):
                 if k in email_layout and email_layout[k]:
                     layout_kwargs[k] = email_layout[k]
         corpo_html = gerar_email_html(

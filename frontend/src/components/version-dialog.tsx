@@ -20,6 +20,16 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.2.0",
+    date: "2026-02-16",
+    summary: "Saudacao automatica por horario (#A01)",
+    items: [
+      "Saudacao do email ajustada automaticamente: Bom dia, Boa tarde ou Boa noite",
+      "Campo saudacao na configuracao de email agora e read-only",
+      "Horarios: Bom dia (0h-12h), Boa tarde (13h-18h), Boa noite (19h-23h)",
+    ],
+  },
+  {
     version: "1.1.0",
     date: "2026-02-16",
     summary: "Indicador de historico de versoes (#A06)",

@@ -199,7 +199,7 @@ export default function HistoricoPage() {
   const totalPages = Math.ceil(total / perPage);
 
   useEffect(() => {
-    apiFetch<Fidc[]>("/fidcs").then(setFidcs).catch(() => {});
+    apiFetch<Fidc[]>("/fidcs?ativo=true").then(setFidcs).catch(() => {});
   }, []);
 
   useEffect(() => {

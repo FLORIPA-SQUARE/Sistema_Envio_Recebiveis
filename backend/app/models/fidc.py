@@ -19,6 +19,9 @@ class Fidc(Base):
     palavras_chave: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     cor: Mapped[str] = mapped_column(String(7), nullable=False)
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    email_introducao: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    email_mensagem_fechamento: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    email_assinatura_nome: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

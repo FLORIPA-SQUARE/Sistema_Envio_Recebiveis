@@ -20,6 +20,18 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.6.0",
+    date: "2026-02-16",
+    summary: "CRUD de FIDCs e textos de email personalizados (#A04, #A05)",
+    items: [
+      "CRUD completo: criar, editar, ativar/desativar FIDCs",
+      "Textos de email personalizados por FIDC (introducao, fechamento, assinatura)",
+      "Fallback per-FIDC: textos do FIDC sobrepoem o layout global",
+      "Interface com tabs (Dados Gerais + Texto de Email) e color picker",
+      "FIDCs inativos filtrados automaticamente em nova operacao e historico",
+    ],
+  },
+  {
     version: "1.5.0",
     date: "2026-02-16",
     summary: "Explorador financeiro (#A02)",

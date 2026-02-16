@@ -597,6 +597,16 @@ async def preview_envio(
             "assinatura_nome": active_layout.assinatura_nome,
         }
 
+    # Override com textos do FIDC (se definidos)
+    if layout_dict is None:
+        layout_dict = {}
+    if fidc.email_introducao:
+        layout_dict["introducao"] = fidc.email_introducao
+    if fidc.email_mensagem_fechamento:
+        layout_dict["mensagem_fechamento"] = fidc.email_mensagem_fechamento
+    if fidc.email_assinatura_nome:
+        layout_dict["assinatura_nome"] = fidc.email_assinatura_nome
+
     # Agrupar por email destino
     storage_base = _storage_path() / "uploads" / str(op.id)
     grupos = agrupar_boletos_para_envio(boletos_aprovados, xmls, fidc, storage_base, email_layout=layout_dict)
@@ -1562,6 +1572,16 @@ async def enviar_operacao(
             "mensagem_fechamento": active_layout.mensagem_fechamento,
             "assinatura_nome": active_layout.assinatura_nome,
         }
+
+    # Override com textos do FIDC (se definidos)
+    if layout_dict is None:
+        layout_dict = {}
+    if fidc.email_introducao:
+        layout_dict["introducao"] = fidc.email_introducao
+    if fidc.email_mensagem_fechamento:
+        layout_dict["mensagem_fechamento"] = fidc.email_mensagem_fechamento
+    if fidc.email_assinatura_nome:
+        layout_dict["assinatura_nome"] = fidc.email_assinatura_nome
 
     # Agrupar por email destino
     storage_base = _storage_path() / "uploads" / str(op.id)

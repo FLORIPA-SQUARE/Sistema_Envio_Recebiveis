@@ -347,7 +347,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
 
   // Load FIDCs
   useEffect(() => {
-    apiFetch<Fidc[]>("/fidcs").then(setFidcs).catch(() => toast.error("Erro ao carregar FIDCs"));
+    apiFetch<Fidc[]>("/fidcs?ativo=true").then(setFidcs).catch(() => toast.error("Erro ao carregar FIDCs"));
   }, []);
 
   // Detect query params for "add files to existing operation"

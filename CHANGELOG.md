@@ -5,6 +5,22 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.6.0] - 2026-02-16
+
+### Adicionado
+- CRUD completo de FIDCs: criar, editar, ativar/desativar (#A04)
+- Endpoint POST /fidcs para criacao de novos FIDCs com validacao de unicidade
+- Filtro ?ativo=true/false no GET /fidcs para separar FIDCs ativos e inativos
+- Textos de email personalizados por FIDC: introducao, mensagem de fechamento e assinatura (#A05)
+- Migration 004: campos email_introducao, email_mensagem_fechamento e email_assinatura_nome na tabela fidcs
+- Fallback per-FIDC nos emails: textos do FIDC sobrepoem o layout global quando definidos
+- Interface com tabs (Dados Gerais + Texto de Email) no dialog de criacao/edicao
+- Chip inputs para emails CC e palavras-chave com adicao/remocao individual
+- Color picker com input hex para cor do FIDC
+- Icone de email customizado nos cards de FIDCs que possuem textos personalizados
+- Toggle ativar/desativar com feedback visual (cards inativos com opacidade reduzida)
+- FIDCs inativos filtrados automaticamente nas telas de nova operacao e historico
+
 ## [1.5.0] - 2026-02-16
 
 ### Adicionado

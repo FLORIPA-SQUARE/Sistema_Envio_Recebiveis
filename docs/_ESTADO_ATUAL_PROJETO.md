@@ -1,7 +1,8 @@
 # ESTADO ATUAL DO PROJETO — Sistema Automação Envio de Boletos
 
 > **Ultima atualizacao:** 2026-02-16
-> **Sessao:** Implementacao M1-M7 + Aprimoramentos A01, A06
+> **Sessao:** Implementacao M1-M7 + Aprimoramentos A01-A06
+> **Versao atual:** v1.6.1
 > **Fonte de verdade:** `docs/prd/PRD-001-Especificacao.md`
 
 ---
@@ -45,7 +46,7 @@
 - [x] Criar script `start_system.bat` e `stop_system.bat`
 - [x] Implementar autenticação JWT (login, bcrypt, 8h expiry)
 - [x] Implementar CRUD de FIDCs (GET lista, PUT editar)
-- [x] Seed de 4 FIDCs + 1 usuário admin
+- [x] Seed de 4 FIDCs + 2 usuarios (admin + camila)
 - [x] Alembic migration com 8 tabelas + índices
 
 ### FASE 2: Core Engine (Backend) — ✅ CONCLUÍDA
@@ -111,6 +112,17 @@
 - [x] CORS permissivo para acesso via rede local
 - [x] Sistema de abas multi-operação (contexto persistente, max 10 tabs)
 
+### Aprimoramentos pos-M7 — ✅ CONCLUÍDOS
+
+- [x] **#A06 (v1.1.0):** Indicador de historico de versoes — badge na sidebar, dialog changelog, endpoint GET /version
+- [x] **#A01 (v1.2.0):** Saudacao automatica por horario — Bom dia/Boa tarde/Boa noite determinado pela hora do servidor
+- [x] **#A06 (v1.3.0):** Valores por operacao — valor bruto (soma boletos) e valor liquido (editavel) no historico e dashboard
+- [x] **#A05 (v1.4.0):** Auditoria de usuarios — registro de login, coluna "Criado por", tab Atividade com timeline
+- [x] **#A02 (v1.5.0):** Explorador financeiro — grafico de barras (recharts) com valores bruto/liquido por dia/semana/mes
+- [x] **#A04 (v1.6.0):** CRUD completo de FIDCs — criar, editar, ativar/desativar, color picker, chip inputs
+- [x] **#A05 (v1.6.0):** Textos de email por FIDC — introducao, fechamento e assinatura personalizados (override do layout global)
+- [x] **Fix (v1.6.1):** Extrator generico como fallback para FIDCs novas sem extrator especializado
+
 ---
 
 ## 3. ESTRUTURA DE DIRETÓRIOS ATUAL
@@ -124,7 +136,7 @@ Sistema_Envio_Recebiveis/
 ├── start_system.bat                        # Inicia Docker + Backend(5556) + Frontend(5555)
 ├── stop_system.bat                         # Para tudo
 ├── CLAUDE.md                               # Instruções do projeto + regra de versionamento
-├── VERSION                                 # Fonte unica de verdade para versao (1.2.0)
+├── VERSION                                 # Fonte unica de verdade para versao (1.6.1)
 ├── CHANGELOG.md                            # Historico de alteracoes por versao
 │
 ├── docs/
@@ -147,18 +159,21 @@ Sistema_Envio_Recebiveis/
 │   ├── alembic/
 │   │   ├── env.py                          # Async migration config
 │   │   └── versions/
-│   │       └── 001_initial_schema.py       # 8 tabelas + índices + uuid-ossp
+│   │       ├── 001_initial_schema.py       # 8 tabelas + índices + uuid-ossp
+│   │       ├── 002_add_user_operacao.py    # criado_por_id em operacoes
+│   │       ├── 003_add_valores_operacao.py # valor_bruto, valor_liquido em operacoes
+│   │       └── 004_fidc_email_fields.py    # email_introducao, email_mensagem_fechamento, email_assinatura_nome em fidcs
 │   ├── app/
 │   │   ├── __init__.py
 │   │   ├── config.py                       # Settings (pydantic-settings, .env)
 │   │   ├── database.py                     # AsyncEngine + AsyncSession (asyncpg)
 │   │   ├── security.py                     # JWT + bcrypt + get_current_user
-│   │   ├── seed.py                         # 4 FIDCs + 1 admin (admin@jotajota.net.br / admin123)
+│   │   ├── seed.py                         # 4 FIDCs + 2 usuarios (admin + camila)
 │   │   ├── models/                         # 8 modelos
 │   │   │   ├── __init__.py                 # Re-exporta todos os modelos
 │   │   │   ├── usuario.py                  # UUID pk, nome, email, senha_hash, ativo
-│   │   │   ├── fidc.py                     # nome, nome_completo, cnpj, cc_emails[], palavras_chave[], cor
-│   │   │   ├── operacao.py                 # numero, fidc_id, status, modo_envio, totais
+│   │   │   ├── fidc.py                     # nome, nome_completo, cnpj, cc_emails[], palavras_chave[], cor, email_*
+│   │   │   ├── operacao.py                 # numero, fidc_id, status, modo_envio, totais, valor_bruto, valor_liquido, criado_por_id
 │   │   │   ├── xml_nfe.py                  # numero_nota, cnpj, valor_total, emails[], emails_invalidos[], duplicatas JSONB
 │   │   │   ├── boleto.py                   # pagador, valor, validacao_camada1-5 JSONB, status
 │   │   │   ├── envio.py                    # email_para[], email_cc[], boletos_ids[], status
@@ -167,25 +182,26 @@ Sistema_Envio_Recebiveis/
 │   │   ├── schemas/
 │   │   │   ├── __init__.py
 │   │   │   ├── auth.py                     # LoginRequest/Response, UsuarioResponse
-│   │   │   ├── fidc.py                     # FidcResponse, FidcUpdate
-│   │   │   ├── operacao.py                 # OperacaoCreate/Response/Detalhada, Upload/Process/Envio results
+│   │   │   ├── fidc.py                     # FidcCreate, FidcUpdate, FidcResponse (com email_*)
+│   │   │   ├── operacao.py                 # OperacaoCreate/Response/Detalhada, ValoresAgregadoItem/Response
 │   │   │   └── auditoria.py               # AuditoriaItem + AuditoriaBuscarResponse
-│   │   ├── routers/                        # 6 routers, 39 endpoints
+│   │   ├── routers/                        # 6 routers, 41+ endpoints
 │   │   │   ├── __init__.py
 │   │   │   ├── auth.py                     # POST /auth/login, GET /auth/me (2)
-│   │   │   ├── fidcs.py                    # GET /fidcs, PUT /fidcs/{id} (2)
-│   │   │   ├── operacoes.py               # 26 endpoints: CRUD, upload, processar, enviar, emails, relatorio
+│   │   │   ├── fidcs.py                    # GET /fidcs(?ativo), POST /fidcs, PUT /fidcs/{id} (3)
+│   │   │   ├── operacoes.py               # 28 endpoints: CRUD, upload, processar, enviar, dashboard/valores, atividade
 │   │   │   ├── auditoria.py              # GET /auditoria/buscar (1)
 │   │   │   ├── email_layout.py           # CRUD layouts, ativar, smtp-status, smtp-test (7)
 │   │   │   └── version.py                # GET /version (1)
-│   │   ├── extractors/                     # 9 extractors
+│   │   ├── extractors/                     # 10 extractors
 │   │   │   ├── __init__.py                 # Re-exporta tudo
 │   │   │   ├── base.py                     # BaseExtractor (ABC) + helpers compartilhados
 │   │   │   ├── capital.py                  # CapitalExtractor — DANFE + boleto
 │   │   │   ├── novax.py                    # NovaxExtractor — texto compacto
 │   │   │   ├── credvale.py                 # CredvaleExtractor — "Pagador" exato (sem colon)
 │   │   │   ├── squid.py                    # SquidExtractor — DANFE + NF do filename
-│   │   │   ├── factory.py                  # get_extractor_by_name(), detect_fidc_from_text()
+│   │   │   ├── generic.py                  # GenericExtractor — fallback para FIDCs sem extrator dedicado
+│   │   │   ├── factory.py                  # get_extractor_by_name() com fallback generico, detect_fidc_from_text()
 │   │   │   ├── xml_parser.py              # parse_xml_nfe() — namespace handling, email validation
 │   │   │   ├── validator.py               # validar_5_camadas() — XML, CNPJ, Nome 85%, Valor 0, Email
 │   │   │   └── renamer.py                 # gerar_nome_arquivo() — {PAGADOR} - NF {NUM} - {DD-MM} - R$ {VALOR}.pdf
@@ -205,38 +221,39 @@ Sistema_Envio_Recebiveis/
 │       └── erros/
 │
 └── frontend/
-    ├── package.json                        # Next.js 16.1.6, React 19, shadcn/ui 3.8, Lucide React
-    ├── next.config.ts                      # Proxy rewrite /api/* → localhost:5556
+    ├── package.json                        # Next.js 16.1.6, React 19, shadcn/ui 3.8, recharts 3.7, Lucide React
+    ├── next.config.ts                      # Proxy rewrite /api/* → localhost:5556, lê VERSION
     ├── components.json                     # shadcn/ui config (Tailwind v4)
     ├── tsconfig.json
     ├── src/
     │   ├── app/
     │   │   ├── layout.tsx                  # Root: DM Sans + Barlow Condensed + Toaster
-    │   │   ├── globals.css                 # Megatela v3.0: #F37021, success, destructive, warning
+    │   │   ├── globals.css                 # Megatela v3.0: #F37021, success, destructive, warning, chart-1/2
     │   │   ├── login/
     │   │   │   └── page.tsx                # Tela login (JWT → localStorage)
     │   │   └── (dashboard)/
     │   │       ├── layout.tsx              # Sidebar autenticada (6 links)
-    │   │       ├── page.tsx                # Dashboard (KPIs reais + operacoes recentes)
+    │   │       ├── page.tsx                # Dashboard (KPIs + explorador financeiro + operacoes recentes)
     │   │       ├── nova-operacao/
-    │   │       │   └── page.tsx            # Megatela: Config → Upload → Processamento → Resultado
+    │   │       │   └── page.tsx            # Megatela: Config → Upload → Processamento → Resultado + Atividade
     │   │       ├── historico/
-    │   │       │   └── page.tsx            # Listagem paginada com filtros FIDC/status
+    │   │       │   └── page.tsx            # Listagem paginada com filtros FIDC/status, valores bruto/liquido
     │   │       ├── auditoria/
     │   │       │   └── page.tsx            # Busca global: search + date range + FIDC/status
     │   │       └── configuracao/
     │   │           ├── fidcs/
-    │   │           │   └── page.tsx        # Cards FIDC com edicao de CC emails
+    │   │           │   └── page.tsx        # CRUD FIDCs: criar, editar, ativar/desativar, tabs (Dados + Email)
     │   │           └── email/
     │   │               └── page.tsx        # Layouts de email: CRUD até 3, SMTP status/test
     │   ├── contexts/
     │   │   └── operation-tabs.tsx          # Multi-aba operações (max 10, persistente)
     │   ├── components/
     │   │   ├── file-dropzone.tsx           # Drag-and-drop com preview
-    │   │   ├── version-dialog.tsx          # Badge de versao + dialog changelog (#A06)
+    │   │   ├── version-dialog.tsx          # Badge de versao + dialog changelog
+    │   │   ├── valores-explorer.tsx        # Explorador financeiro com grafico recharts (#A02)
     │   │   └── ui/                         # shadcn/ui: button, input, label, card, badge, table,
     │   │                                   #            dialog, sonner, select, progress, separator,
-    │   │                                   #            scroll-area, tabs, sheet
+    │   │                                   #            scroll-area, tabs, sheet, switch, textarea
     │   └── lib/
     │       ├── api.ts                      # apiFetch() — JWT injection + 401 redirect
     │       └── utils.ts                    # cn() helper (shadcn)
@@ -264,8 +281,8 @@ python -m venv venv                          # Apenas primeira vez
 venv\Scripts\activate
 pip install -r requirements.txt              # Apenas primeira vez
 alembic upgrade head                         # Migrations
-python -m app.seed                           # Seed (4 FIDCs + admin)
-uvicorn main:app --reload --port 5556
+python -m app.seed                           # Seed (4 FIDCs + 2 usuarios)
+uvicorn main:app --reload --host 0.0.0.0 --port 5556
 
 # 3. Frontend (Next.js)
 cd frontend
@@ -273,8 +290,9 @@ npm install                                  # Apenas primeira vez
 npm run dev                                  # http://localhost:5555
 ```
 
-### Credenciais de desenvolvimento
-- **Login:** `admin@jotajota.net.br` / `admin123`
+### Credenciais
+- **Admin:** `admin@jotajota.net.br` / `admin123`
+- **Camila:** `camila@jotajota.net.br` / `acessoJJcamila26`
 - **API Docs:** http://localhost:5556/api/docs
 - **Frontend:** http://localhost:5555
 
@@ -282,25 +300,24 @@ npm run dev                                  # http://localhost:5555
 
 ## 5. STATUS GERAL
 
-### Projeto COMPLETO (M1-M7) + Aprimoramentos — Em uso producao (rede local)
+### Projeto COMPLETO (M1-M7) + Aprimoramentos A01-A06 — Em uso producao (rede local)
 
 Todas as fases de desenvolvimento foram concluidas com sucesso.
-O sistema esta funcional e em uso na rede local. Versao atual: **v1.2.0**.
+O sistema esta funcional e em uso na rede local. Versao atual: **v1.6.1**.
 
 **Ultimos commits:**
+- `302dd93` fix: remover credenciais pre-preenchidas na tela de login
+- `eebf064` chore: adicionar usuario Camila ao seed
+- `73eab85` fix: extrator generico como fallback para FIDCs novas — **v1.6.1**
+- `7b44766` feat: CRUD de FIDCs e textos de email personalizados (#A04, #A05) — **v1.6.0**
+- `84a8841` feat: explorador financeiro com grafico de valores por periodo (#A02) — **v1.5.0**
+- `c2aa12f` feat: valores por operacao e auditoria de usuarios (#A06, #A05) — **v1.3.0 / v1.4.0**
 - `ec6ddcd` feat: saudacao automatica por horario no email (#A01) — **v1.2.0**
 - `ac19866` feat: adicionar indicador de historico de versoes (#A06) — **v1.1.0**
-- `e3ff63b` docs: atualizar estado atual do projeto com correcoes recentes
-- `5a11546` fix: corrigir edicao de emails de XMLs na tela de upload
-- `87cd228` fix: anexar NF em PDF no email SMTP ao confirmar envio
-- `40bf9e3` CORS permissivo para acesso via rede local
-
-**Aprimoramentos implementados (pos M7):**
-- **#A06 (v1.1.0):** Indicador de historico de versoes — badge na sidebar, dialog com changelog, endpoint GET /version, arquivo VERSION, CHANGELOG.md, regra obrigatoria no CLAUDE.md
-- **#A01 (v1.2.0):** Saudacao automatica por horario — Bom dia (0h-12h), Boa tarde (13h-18h), Boa noite (19h-23h). Campo read-only na configuracao de email, saudacao determinada pela hora do servidor no momento do envio
 
 **Bugs corrigidos recentemente:**
-- **Bug #07:** Edicao de emails de XMLs — auto-inclusao de email pendente no input ao salvar, functional updaters, state batching, re-fetch completo apos PATCH
+- **v1.6.1:** Erro 500 no upload de boletos para FIDCs novas — GenericExtractor como fallback
+- **Bug #07:** Edicao de emails de XMLs — auto-inclusao de email pendente no input ao salvar
 
 **Melhorias opcionais futuras:**
 1. **Refatoracao** — `nova-operacao/page.tsx` (~2900 linhas) em sub-componentes
@@ -322,6 +339,10 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.2.0**.
 | API Proxy | Next.js rewrites | `/api/*` → `localhost:5556` |
 | DB Driver | asyncpg | SQLAlchemy 2.x async |
 | Email | SMTP (smtplib) | Substituiu Outlook COM (pywin32 removido) |
+| Email per-FIDC | 3 campos nullable | Override do layout global (NULL = usar global) |
+| Graficos | recharts 3.7.0 | Explorador financeiro com BarChart |
+| Extrator generico | GenericExtractor | Fallback para FIDCs sem extrator dedicado |
+| FIDC CRUD | Soft delete (ativo) | FK operacoes.fidc_id impede DELETE; nome imutavel apos criacao |
 | Encoding | Evitar ≥ em mensagens | Windows cp1252 não suporta Unicode math |
 | Upload | FormData direto | Não usar `apiFetch` wrapper (não suporta multipart) |
 | Valor tolerance | 0 centavos | Zero tolerância — regra de negócio inviolável |
@@ -330,11 +351,13 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.2.0**.
 | Tabs | Max 10 | Contexto de operação persistente via React Context |
 | Saudacao email | Automatica por horario | Bom dia (0-12h), Boa tarde (13-18h), Boa noite (19-23h) |
 | Versionamento | Semantic Versioning | Arquivo `VERSION` na raiz, tags git, CHANGELOG.md |
+| Version caching | Restart obrigatorio | Backend (main.py) e frontend (next.config.ts) leem VERSION no startup |
 
 ---
 
 ## 7. SEED DATA (Referência Rápida)
 
+### FIDCs iniciais (seed)
 | FIDC | CNPJ | Cor | CC Emails |
 |------|------|-----|-----------|
 | CAPITAL | 12.910.463/0001-70 | #0e639c | adm@jotajota.net.br |
@@ -342,11 +365,19 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.2.0**.
 | CREDVALE | — | #d83b01 | adm@jotajota.net.br, nichole@credvalefidc.com.br |
 | SQUID | — | #8764b8 | adm@jotajota.net.br |
 
+> **Nota:** Novas FIDCs podem ser criadas via interface CRUD em `/configuracao/fidcs` (v1.6.0+). FIDCs novas usam o GenericExtractor para extracao de boletos.
+
+### Usuarios iniciais (seed)
+| Nome | Email | Senha |
+|------|-------|-------|
+| Administrador | admin@jotajota.net.br | admin123 |
+| Camila | camila@jotajota.net.br | acessoJJcamila26 |
+
 ---
 
 ## 8. VERSIONAMENTO
 
-### Versao Atual: 1.2.0
+### Versao Atual: 1.6.1
 
 O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 - **MAJOR** (X.0.0): Mudancas incompativeis (schema DB, API breaking changes)
@@ -362,13 +393,14 @@ O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 | `CLAUDE.md` (raiz) | Regra obrigatoria de atualizacao a cada commit |
 
 ### Como Atualizar a Versao
-1. Editar `VERSION` com o novo numero (ex: `1.2.0`)
+1. Editar `VERSION` com o novo numero (ex: `1.6.1`)
 2. Adicionar entrada no `CHANGELOG.md`
 3. Atualizar `CHANGELOG_ENTRIES` em `frontend/src/components/version-dialog.tsx`
 4. Atualizar `version` em `frontend/package.json`
 5. Atualizar a **Versao Atual** nesta secao e no `CLAUDE.md`
-6. Commit: `release: vX.Y.Z`
-7. Tag: `git tag -a vX.Y.Z -m "vX.Y.Z: descricao" && git push origin vX.Y.Z`
+6. **IMPORTANTE:** Reiniciar backend e frontend apos atualizar VERSION (ambos leem no startup)
+7. Commit: `release: vX.Y.Z`
+8. Tag: `git tag -a vX.Y.Z -m "vX.Y.Z: descricao" && git push origin vX.Y.Z`
 
 ### Tags Git
 | Tag | Commit | Data | Descricao |
@@ -376,3 +408,8 @@ O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 | v1.0.0 | e3ff63b | 2026-02-13 | Primeira versao completa (M1-M7) |
 | v1.1.0 | ac19866 | 2026-02-16 | Indicador de historico de versoes (#A06) |
 | v1.2.0 | ec6ddcd | 2026-02-16 | Saudacao automatica por horario (#A01) |
+| v1.3.0 | c2aa12f | 2026-02-16 | Valores por operacao — bruto e liquido (#A06) |
+| v1.4.0 | c2aa12f | 2026-02-16 | Auditoria de usuarios — login, criado_por, timeline (#A05) |
+| v1.5.0 | 84a8841 | 2026-02-16 | Explorador financeiro com grafico recharts (#A02) |
+| v1.6.0 | 7b44766 | 2026-02-16 | CRUD FIDCs + textos email personalizados (#A04, #A05) |
+| v1.6.1 | 73eab85 | 2026-02-16 | Extrator generico como fallback para FIDCs novas |

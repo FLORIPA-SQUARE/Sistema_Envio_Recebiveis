@@ -42,6 +42,8 @@ interface Operacao {
   total_aprovados: number;
   total_rejeitados: number;
   taxa_sucesso: number;
+  valor_bruto: number | null;
+  valor_liquido: number | null;
   created_at: string;
 }
 
@@ -73,6 +75,16 @@ function StatusBadge({ status }: { status: string }) {
     return <Badge variant="destructive">Cancelada</Badge>;
   }
   return <Badge variant="outline">{status}</Badge>;
+}
+
+function formatCurrency(value: number | null): string {
+  if (value == null) return "—";
+  return value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 export default function DashboardPage() {
@@ -196,6 +208,7 @@ export default function DashboardPage() {
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Boletos</TableHead>
                     <TableHead className="text-right">Taxa (%)</TableHead>
+                    <TableHead className="text-right">Vl. Bruto</TableHead>
                     <TableHead className="text-center">Acoes</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -221,6 +234,9 @@ export default function DashboardPage() {
                       </TableCell>
                       <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
                         {op.taxa_sucesso.toFixed(1)}%
+                      </TableCell>
+                      <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)] whitespace-nowrap">
+                        {formatCurrency(op.valor_bruto)}
                       </TableCell>
                       <TableCell className="text-center">
                         <Button

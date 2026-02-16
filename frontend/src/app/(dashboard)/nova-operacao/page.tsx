@@ -137,6 +137,8 @@ interface OperacaoDetalhada {
   total_aprovados: number;
   total_rejeitados: number;
   taxa_sucesso: number;
+  valor_bruto: number | null;
+  valor_liquido: number | null;
   boletos: BoletoCompleto[];
   xmls: XmlResumo[];
   created_at: string;
@@ -171,6 +173,20 @@ interface EnvioRecord {
   xmls_anexados: string[];
   timestamp_envio: string | null;
   created_at: string;
+}
+
+interface AtividadeItem {
+  id: number;
+  acao: string;
+  acao_label: string;
+  usuario_nome: string | null;
+  detalhes: Record<string, unknown> | null;
+  created_at: string;
+}
+
+interface AtividadeResponse {
+  items: AtividadeItem[];
+  total: number;
 }
 
 interface PreviewEnvioGrupo {
@@ -300,6 +316,8 @@ function OperationEditor({ tabId }: { tabId: string }) {
   const [envioResult, setEnvioResult] = useState<EnvioResultado | null>(null);
   const [envios, setEnvios] = useState<EnvioRecord[]>([]);
   const [enviosLoading, setEnviosLoading] = useState(false);
+  const [atividade, setAtividade] = useState<AtividadeItem[]>([]);
+  const [atividadeLoading, setAtividadeLoading] = useState(false);
   const [confirmEnvioAuto, setConfirmEnvioAuto] = useState(false);
   const [emailPreviewHtml, setEmailPreviewHtml] = useState<string | null>(null);
   const [emailPreviewSubject, setEmailPreviewSubject] = useState("");
@@ -377,6 +395,9 @@ function OperationEditor({ tabId }: { tabId: string }) {
             .catch(() => {});
           apiFetch<EnvioRecord[]>(`/operacoes/${op.id}/envios`)
             .then(setEnvios)
+            .catch(() => {});
+          apiFetch<AtividadeResponse>(`/operacoes/${op.id}/atividade`)
+            .then((data) => setAtividade(data.items))
             .catch(() => {});
           // Determinar step
           if (tab.step === "resultado" && op.status === "concluida") {
@@ -741,6 +762,19 @@ function OperationEditor({ tabId }: { tabId: string }) {
       // silencioso
     } finally {
       setEnviosLoading(false);
+    }
+  }
+
+  async function fetchAtividade() {
+    if (!operacaoId) return;
+    setAtividadeLoading(true);
+    try {
+      const data = await apiFetch<AtividadeResponse>(`/operacoes/${operacaoId}/atividade`);
+      setAtividade(data.items);
+    } catch {
+      // silencioso
+    } finally {
+      setAtividadeLoading(false);
     }
   }
 
@@ -2381,6 +2415,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
               <TabsTrigger value="xmls">XMLs ({uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).length})</TabsTrigger>
               <TabsTrigger value="nfs">Notas Fiscais ({uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".pdf")).length})</TabsTrigger>
               <TabsTrigger value="envio" onClick={() => fetchEnvios()}>Envio ({envios.length})</TabsTrigger>
+              <TabsTrigger value="atividade" onClick={() => fetchAtividade()}>Atividade</TabsTrigger>
             </TabsList>
 
             {/* Boletos tab with expandable validation + preview */}
@@ -2782,6 +2817,62 @@ function OperationEditor({ tabId }: { tabId: string }) {
             {/* Envio tab — historico only */}
             <TabsContent value="envio" className="mt-4 space-y-4">
               {renderHistoricoEnvios()}
+            </TabsContent>
+
+            {/* Atividade tab — timeline de ações */}
+            <TabsContent value="atividade" className="mt-4 space-y-4">
+              {atividadeLoading ? (
+                <p className="text-center text-muted-foreground py-8">Carregando...</p>
+              ) : atividade.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  Nenhuma atividade registrada.
+                </p>
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Historico de Atividades</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="relative border-l-2 border-primary/30 ml-4 space-y-6">
+                      {atividade.map((item) => (
+                        <div key={item.id} className="relative pl-6">
+                          <div className="absolute -left-[9px] top-1 h-4 w-4 rounded-full bg-primary border-2 border-background" />
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-sm">
+                                {item.usuario_nome || "Sistema"}
+                              </span>
+                              <span className="text-sm text-muted-foreground">
+                                {item.acao_label}
+                              </span>
+                            </div>
+                            {item.detalhes && Object.keys(item.detalhes).length > 0 && (
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                {Object.entries(item.detalhes).map(([key, val]) => (
+                                  <span key={key}>
+                                    <span className="font-medium">{key}:</span>{" "}
+                                    {String(val)}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            <span className="text-xs text-muted-foreground/70">
+                              {new Date(item.created_at).toLocaleDateString("pt-BR", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                second: "2-digit",
+                              })}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
           </Tabs>
         </div>

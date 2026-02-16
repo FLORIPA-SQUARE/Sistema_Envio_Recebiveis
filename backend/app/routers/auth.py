@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models.usuario import Usuario
 from app.schemas.auth import LoginRequest, LoginResponse, UsuarioResponse
 from app.security import create_access_token, get_current_user, verify_password
+from app.services.audit import registrar_audit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -28,6 +29,13 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
         )
 
     token = create_access_token({"sub": str(user.id)})
+
+    await registrar_audit(
+        db, acao="login", usuario_id=user.id,
+        entidade="usuario", detalhes={"email": user.email},
+    )
+    await db.commit()
+
     return LoginResponse(
         access_token=token,
         usuario=UsuarioResponse.model_validate(user),

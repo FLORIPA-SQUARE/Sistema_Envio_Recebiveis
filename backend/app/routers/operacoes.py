@@ -71,6 +71,9 @@ from app.schemas.operacao import (
     OperacaoFinalizada,
     OperacaoResponse,
     OperacoesPaginadas,
+    ValorLiquidoUpdate,
+    AtividadeItem,
+    AtividadeResponse,
     PreviewEnvioGrupo,
     PreviewEnvioResponse,
     ResultadoProcessamento,
@@ -95,6 +98,20 @@ from app.services.report_generator import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/operacoes", tags=["operacoes"])
+
+ACAO_LABELS: dict[str, str] = {
+    "login": "Realizou login",
+    "criar_operacao": "Criou a operacao",
+    "atualizar_valor_liquido": "Atualizou valor liquido",
+    "processar_operacao": "Processou boletos",
+    "reprocessar_operacao": "Reprocessou boletos rejeitados",
+    "finalizar_operacao": "Finalizou a operacao",
+    "cancelar_operacao": "Cancelou a operacao",
+    "enviar_operacao": "Enviou emails",
+    "confirmar_envio_smtp": "Confirmou envio de email",
+    "confirmar_todos_envios_smtp": "Confirmou todos os envios",
+    "envio_status_manual": "Atualizou status do envio",
+}
 
 
 # ── Helpers ───────────────────────────────────────────────────
@@ -208,10 +225,19 @@ async def list_operacoes(
     fidcs_result = await db.execute(select(Fidc).where(Fidc.id.in_(fidc_ids)))
     fidcs_map = {f.id: f.nome for f in fidcs_result.scalars().all()}
 
+    # Resolver usuario_nome (criador) para cada operacao
+    usuario_ids = list({o.usuario_id for o in ops})
+    if usuario_ids:
+        usuarios_result = await db.execute(select(Usuario).where(Usuario.id.in_(usuario_ids)))
+        usuarios_map = {u.id: u.nome for u in usuarios_result.scalars().all()}
+    else:
+        usuarios_map = {}
+
     items = []
     for o in ops:
         resp = OperacaoResponse.model_validate(o)
         resp.fidc_nome = fidcs_map.get(o.fidc_id)
+        resp.usuario_nome = usuarios_map.get(o.usuario_id)
         items.append(resp)
 
     return OperacoesPaginadas(
@@ -262,10 +288,18 @@ async def dashboard_stats(
     else:
         fidcs_map = {}
 
+    usuario_ids = list({o.usuario_id for o in recentes})
+    if usuario_ids:
+        usuarios_result = await db.execute(select(Usuario).where(Usuario.id.in_(usuario_ids)))
+        usuarios_map = {u.id: u.nome for u in usuarios_result.scalars().all()}
+    else:
+        usuarios_map = {}
+
     recentes_resp = []
     for o in recentes:
         resp = OperacaoResponse.model_validate(o)
         resp.fidc_nome = fidcs_map.get(o.fidc_id)
+        resp.usuario_nome = usuarios_map.get(o.usuario_id)
         recentes_resp.append(resp)
 
     return DashboardStats(
@@ -322,9 +356,40 @@ async def update_operacao(
         total_aprovados=op.total_aprovados,
         total_rejeitados=op.total_rejeitados,
         taxa_sucesso=op.taxa_sucesso,
+        valor_bruto=op.valor_bruto,
+        valor_liquido=op.valor_liquido,
         created_at=op.created_at,
         updated_at=op.updated_at,
     )
+
+
+# ── PATCH /operacoes/{op_id}/valor-liquido ──────────────────
+
+
+@router.patch("/{op_id}/valor-liquido", response_model=OperacaoResponse)
+async def atualizar_valor_liquido(
+    op_id: str,
+    body: ValorLiquidoUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Atualiza o valor liquido de uma operacao."""
+    op = await _get_operacao(op_id, db)
+
+    op.valor_liquido = body.valor_liquido
+
+    await registrar_audit(
+        db, acao="atualizar_valor_liquido", operacao_id=op.id,
+        usuario_id=current_user.id, entidade="operacao",
+        detalhes={"valor_liquido": body.valor_liquido},
+    )
+    await db.commit()
+    await db.refresh(op)
+
+    fidc = await _get_fidc(op.fidc_id, db)
+    resp = OperacaoResponse.model_validate(op)
+    resp.fidc_nome = fidc.nome
+    return resp
 
 
 # ── GET /operacoes/{op_id}/boletos/{boleto_id}/arquivo ──────
@@ -568,6 +633,49 @@ async def download_arquivos(
     )
 
 
+# ── GET /operacoes/{id}/atividade ──────────────────────────
+
+
+@router.get("/{op_id}/atividade", response_model=AtividadeResponse)
+async def listar_atividade(
+    op_id: str,
+    db: AsyncSession = Depends(get_db),
+    _current_user: Usuario = Depends(get_current_user),
+):
+    """Lista historico de acoes (audit trail) de uma operacao."""
+    await _get_operacao(op_id, db)
+
+    result = await db.execute(
+        select(AuditLog)
+        .where(AuditLog.operacao_id == op_id)
+        .order_by(AuditLog.created_at.desc())
+    )
+    logs = result.scalars().all()
+
+    usuario_ids = list({log.usuario_id for log in logs if log.usuario_id})
+    if usuario_ids:
+        usuarios_result = await db.execute(
+            select(Usuario).where(Usuario.id.in_(usuario_ids))
+        )
+        usuarios_map = {u.id: u.nome for u in usuarios_result.scalars().all()}
+    else:
+        usuarios_map = {}
+
+    items = [
+        AtividadeItem(
+            id=log.id,
+            acao=log.acao,
+            acao_label=ACAO_LABELS.get(log.acao, log.acao),
+            usuario_nome=usuarios_map.get(log.usuario_id) if log.usuario_id else None,
+            detalhes=log.detalhes,
+            created_at=log.created_at,
+        )
+        for log in logs
+    ]
+
+    return AtividadeResponse(items=items, total=len(items))
+
+
 # ── GET /operacoes/{id} ─────────────────────────────────────
 
 
@@ -600,6 +708,8 @@ async def get_operacao_detail(
         total_aprovados=op.total_aprovados,
         total_rejeitados=op.total_rejeitados,
         taxa_sucesso=op.taxa_sucesso,
+        valor_bruto=op.valor_bruto,
+        valor_liquido=op.valor_liquido,
         created_at=op.created_at,
         boletos=[BoletoCompleto.model_validate(b) for b in boletos],
         xmls=[XmlResumo.model_validate(x) for x in xmls],
@@ -969,6 +1079,13 @@ async def processar_operacao(
     op.total_rejeitados = rejeitados
     op.taxa_sucesso = (aprovados / total * 100) if total > 0 else 0.0
 
+    # Computar valor bruto (soma dos boletos aprovados)
+    valor_bruto_total = sum(
+        b.valor for b in boletos
+        if b.status == "aprovado" and b.valor is not None
+    )
+    op.valor_bruto = valor_bruto_total if valor_bruto_total > 0 else None
+
     await registrar_audit(
         db, acao="processar_operacao", operacao_id=op.id,
         usuario_id=_current_user.id, entidade="operacao",
@@ -981,6 +1098,7 @@ async def processar_operacao(
         aprovados=aprovados,
         rejeitados=rejeitados,
         taxa_sucesso=op.taxa_sucesso,
+        valor_bruto=op.valor_bruto,
         boletos=boletos_processados,
     )
 
@@ -1121,6 +1239,13 @@ async def reprocessar_operacao(
     op.total_rejeitados = total_rejeitados
     op.taxa_sucesso = (total_aprovados / total * 100) if total > 0 else 0.0
 
+    # Recalcular valor bruto (soma dos boletos aprovados)
+    valor_bruto_total = sum(
+        b.valor for b in all_boletos
+        if b.status == "aprovado" and b.valor is not None
+    )
+    op.valor_bruto = valor_bruto_total if valor_bruto_total > 0 else None
+
     await registrar_audit(
         db, acao="reprocessar_operacao", operacao_id=op.id,
         usuario_id=current_user.id, entidade="operacao",
@@ -1137,6 +1262,7 @@ async def reprocessar_operacao(
         aprovados=novos_aprovados,
         rejeitados=ainda_rejeitados,
         taxa_sucesso=op.taxa_sucesso,
+        valor_bruto=op.valor_bruto,
         boletos=boletos_processados,
     )
 
@@ -1210,6 +1336,8 @@ async def finalizar_operacao(
         total_aprovados=op.total_aprovados,
         total_rejeitados=op.total_rejeitados,
         taxa_sucesso=op.taxa_sucesso,
+        valor_bruto=op.valor_bruto,
+        valor_liquido=op.valor_liquido,
         relatorio_gerado=relatorio_gerado,
     )
 

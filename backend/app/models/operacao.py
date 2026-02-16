@@ -23,6 +23,8 @@ class Operacao(Base):
     total_aprovados: Mapped[int] = mapped_column(Integer, default=0)
     total_rejeitados: Mapped[int] = mapped_column(Integer, default=0)
     taxa_sucesso: Mapped[float] = mapped_column(Float, default=0.0)
+    valor_bruto: Mapped[float | None] = mapped_column(Float, nullable=True)
+    valor_liquido: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

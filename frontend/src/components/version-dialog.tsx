@@ -20,6 +20,29 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.4.0",
+    date: "2026-02-16",
+    summary: "Auditoria do banco de dados (#A05)",
+    items: [
+      "Registro de login no audit_log para rastreamento de acessos",
+      "Coluna 'Criado por' na tabela de historico de operacoes",
+      "Nome do criador visivel no dashboard de operacoes recentes",
+      "Endpoint GET /operacoes/{id}/atividade para historico de acoes",
+      "Tab Atividade com timeline visual mostrando quem executou cada acao",
+    ],
+  },
+  {
+    version: "1.3.0",
+    date: "2026-02-16",
+    summary: "Exibir valores por operacao (#A06)",
+    items: [
+      "Valor Total Bruto (soma dos boletos aprovados) visivel no historico e dashboard",
+      "Valor Liquido editavel por operacao na tabela de historico",
+      "Calculo automatico de valor bruto durante processamento de boletos",
+      "Endpoint PATCH para atualizar valor liquido com registro de auditoria",
+    ],
+  },
+  {
     version: "1.2.0",
     date: "2026-02-16",
     summary: "Saudacao automatica por horario (#A01)",

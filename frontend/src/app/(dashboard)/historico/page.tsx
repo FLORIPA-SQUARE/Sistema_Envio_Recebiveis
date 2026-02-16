@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useOperationTabs } from "@/contexts/operation-tabs";
@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Eye, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 
@@ -41,12 +42,15 @@ interface Operacao {
   numero: string;
   fidc_id: string;
   fidc_nome: string | null;
+  usuario_nome: string | null;
   status: string;
   modo_envio: string;
   total_boletos: number;
   total_aprovados: number;
   total_rejeitados: number;
   taxa_sucesso: number;
+  valor_bruto: number | null;
+  valor_liquido: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -86,6 +90,98 @@ function StatusBadge({ status }: { status: string }) {
     return <Badge variant="destructive">{config.label}</Badge>;
   }
   return <Badge variant="outline">{config.label}</Badge>;
+}
+
+function formatCurrency(value: number | null): string {
+  if (value == null) return "—";
+  return value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function ValorLiquidoInput({
+  operacaoId,
+  value,
+  onSaved,
+}: {
+  operacaoId: string;
+  value: number | null;
+  onSaved: (newValue: number | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  function handleStartEdit() {
+    setInputValue(value != null ? String(value) : "");
+    setEditing(true);
+  }
+
+  async function handleSave() {
+    const trimmed = inputValue.trim();
+    const parsed = trimmed === "" ? null : parseFloat(trimmed.replace(",", "."));
+    if (trimmed !== "" && (parsed === null || isNaN(parsed))) {
+      toast.error("Valor invalido");
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiFetch(`/operacoes/${operacaoId}/valor-liquido`, {
+        method: "PATCH",
+        body: JSON.stringify({ valor_liquido: parsed }),
+      });
+      onSaved(parsed);
+      setEditing(false);
+    } catch {
+      toast.error("Erro ao salvar valor liquido");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter") handleSave();
+    if (e.key === "Escape") setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <Input
+        ref={inputRef}
+        type="text"
+        inputMode="decimal"
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        disabled={saving}
+        className="h-7 w-28 text-right font-[family-name:var(--font-barlow-condensed)] text-sm"
+        placeholder="0,00"
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="cursor-pointer hover:underline font-[family-name:var(--font-barlow-condensed)] text-sm whitespace-nowrap"
+      onClick={handleStartEdit}
+      title="Clique para editar"
+    >
+      {formatCurrency(value)}
+    </button>
+  );
 }
 
 export default function HistoricoPage() {
@@ -228,12 +324,15 @@ export default function HistoricoPage() {
                   <TableRow>
                     <TableHead>Numero</TableHead>
                     <TableHead>FIDC</TableHead>
+                    <TableHead>Criado por</TableHead>
                     <TableHead>Data</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Aprovados</TableHead>
                     <TableHead className="text-right">Rejeitados</TableHead>
                     <TableHead className="text-right">Taxa (%)</TableHead>
+                    <TableHead className="text-right">Vl. Bruto</TableHead>
+                    <TableHead className="text-right">Vl. Liquido</TableHead>
                     <TableHead className="text-center">Acoes</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -248,6 +347,9 @@ export default function HistoricoPage() {
                         {op.numero}
                       </TableCell>
                       <TableCell>{op.fidc_nome || "—"}</TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {op.usuario_nome || "—"}
+                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDate(op.created_at)}
                       </TableCell>
@@ -265,6 +367,22 @@ export default function HistoricoPage() {
                       </TableCell>
                       <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
                         {op.taxa_sucesso.toFixed(1)}%
+                      </TableCell>
+                      <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)] whitespace-nowrap">
+                        {formatCurrency(op.valor_bruto)}
+                      </TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <ValorLiquidoInput
+                          operacaoId={op.id}
+                          value={op.valor_liquido}
+                          onSaved={(newValue) => {
+                            setOperacoes((prev) =>
+                              prev.map((o) =>
+                                o.id === op.id ? { ...o, valor_liquido: newValue } : o
+                              )
+                            );
+                          }}
+                        />
                       </TableCell>
                       <TableCell className="text-center">
                         <Button

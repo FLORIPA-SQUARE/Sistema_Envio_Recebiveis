@@ -5,6 +5,25 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.4.0] - 2026-02-16
+
+### Adicionado
+- Auditoria de acesso: registro de login no audit_log (#A05)
+- Coluna "Criado por" na tabela de historico de operacoes (#A05)
+- Nome do criador visivel no dashboard de operacoes recentes (#A05)
+- Endpoint GET /operacoes/{id}/atividade para consultar historico de acoes (#A05)
+- Tab "Atividade" na tela de operacao com timeline visual de acoes (#A05)
+- Timeline mostra quem criou, processou, enviou e finalizou cada operacao
+
+## [1.3.0] - 2026-02-16
+
+### Adicionado
+- Exibicao de Valor Total Bruto (soma dos boletos aprovados) na tabela de historico e dashboard (#A06)
+- Campo editavel de Valor Liquido por operacao na tabela de historico (#A06)
+- Endpoint PATCH /operacoes/{id}/valor-liquido para atualizar valor liquido
+- Colunas valor_bruto e valor_liquido no modelo de operacao (migration 003)
+- Calculo automatico de valor_bruto durante processamento e reprocessamento de boletos
+
 ## [1.2.0] - 2026-02-16
 
 ### Adicionado

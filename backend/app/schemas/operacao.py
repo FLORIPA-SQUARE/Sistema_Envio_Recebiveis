@@ -23,6 +23,10 @@ class OperacaoUpdate(BaseModel):
     numero: str | None = None
 
 
+class ValorLiquidoUpdate(BaseModel):
+    valor_liquido: float | None = None
+
+
 # ── Response schemas ──────────────────────────────────────────
 
 
@@ -31,12 +35,15 @@ class OperacaoResponse(BaseModel):
     numero: str
     fidc_id: uuid.UUID
     fidc_nome: str | None = None
+    usuario_nome: str | None = None
     status: str
     modo_envio: str
     total_boletos: int
     total_aprovados: int
     total_rejeitados: int
     taxa_sucesso: float
+    valor_bruto: float | None = None
+    valor_liquido: float | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -98,6 +105,8 @@ class OperacaoDetalhada(BaseModel):
     total_aprovados: int
     total_rejeitados: int
     taxa_sucesso: float
+    valor_bruto: float | None = None
+    valor_liquido: float | None = None
     created_at: datetime
     boletos: list[BoletoCompleto]
     xmls: list[XmlResumo]
@@ -121,6 +130,7 @@ class ResultadoProcessamento(BaseModel):
     aprovados: int
     rejeitados: int
     taxa_sucesso: float
+    valor_bruto: float | None = None
     boletos: list[BoletoCompleto]
 
 
@@ -147,6 +157,8 @@ class OperacaoFinalizada(BaseModel):
     total_aprovados: int
     total_rejeitados: int
     taxa_sucesso: float
+    valor_bruto: float | None = None
+    valor_liquido: float | None = None
     relatorio_gerado: bool
 
 
@@ -210,5 +222,22 @@ class PreviewEnvioResponse(BaseModel):
     total_grupos: int
     total_aprovados: int
     grupos: list[PreviewEnvioGrupo]
+
+
+# ── Atividade (audit trail) schemas ────────────────────────
+
+
+class AtividadeItem(BaseModel):
+    id: int
+    acao: str
+    acao_label: str
+    usuario_nome: str | None = None
+    detalhes: dict | None = None
+    created_at: datetime
+
+
+class AtividadeResponse(BaseModel):
+    items: list[AtividadeItem]
+    total: int
 
 

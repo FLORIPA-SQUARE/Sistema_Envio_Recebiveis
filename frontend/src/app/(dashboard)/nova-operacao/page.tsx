@@ -327,6 +327,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
   const [expandedBoleto, setExpandedBoleto] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [operacaoCreatedAt, setOperacaoCreatedAt] = useState<string | null>(null);
+  const [versaoFinalizacao, setVersaoFinalizacao] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<"finalizar" | "cancelar" | "excluir" | null>(null);
   const [editingXmlId, setEditingXmlId] = useState<string | null>(null);
   const [editEmailsList, setEditEmailsList] = useState<string[]>([]);
@@ -377,6 +378,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
         setSavedFidc(op.fidc.id);
         setSavedNumero(op.numero);
         setOperacaoCreatedAt(op.created_at);
+        setVersaoFinalizacao(op.versao_finalizacao || null);
 
         const foiProcessada = op.boletos.some((b: BoletoCompleto) =>
           b.status === "aprovado" || b.status === "parcialmente_aprovado" || b.status === "rejeitado"
@@ -695,6 +697,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
         { method: "POST" }
       );
       setResultado(result);
+      setUploadedBoletos(result.boletos);
       toast.success(
         `Processamento concluido: ${result.aprovados} aprovados, ${result.rejeitados} rejeitados`
       );
@@ -995,6 +998,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
         { method: "POST" }
       );
       setResultado(result);
+      setUploadedBoletos(result.boletos);
       toast.success(`Reprocessamento: ${result.aprovados} aprovados, ${result.rejeitados} rejeitados`);
     } catch {
       toast.error("Erro ao reprocessar");
@@ -1019,6 +1023,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
         boletos: op.boletos,
       });
       setUploadedXmls(op.xmls);
+      setVersaoFinalizacao(op.versao_finalizacao || null);
     } catch {
       toast.error("Erro ao finalizar");
     } finally {
@@ -1833,6 +1838,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                         <TableHead>NF</TableHead>
                         <TableHead className="text-right">Valor</TableHead>
                         <TableHead>Vencimento</TableHead>
+                        <TableHead title="Status é mostrado pós processamento">Status</TableHead>
                         <TableHead>Destinatario</TableHead>
                         <TableHead>Email</TableHead>
                       </TableRow>
@@ -1849,7 +1855,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                           <Fragment key={boleto.id}>
                             {showSeparator && (
                               <TableRow className="pointer-events-none">
-                                <TableCell colSpan={7} className="py-1 px-0">
+                                <TableCell colSpan={8} className="py-1 px-0">
                                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                     <div className="flex-1 border-t" />
                                     <span className="font-medium font-[family-name:var(--font-barlow-condensed)] whitespace-nowrap">{curPagador}</span>
@@ -1886,6 +1892,17 @@ function OperationEditor({ tabId }: { tabId: string }) {
                               <TableCell className="font-[family-name:var(--font-barlow-condensed)]">
                                 {boleto.vencimento || "—"}
                               </TableCell>
+                              <TableCell>
+                                {boleto.status === "aprovado" ? (
+                                  <Badge className="bg-success text-success-foreground hover:bg-success/90">Aprovado</Badge>
+                                ) : boleto.status === "parcialmente_aprovado" ? (
+                                  <Badge className="bg-blue-600 text-white hover:bg-blue-600/90">Parcial</Badge>
+                                ) : boleto.status === "rejeitado" ? (
+                                  <Badge variant="destructive">Rejeitado</Badge>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
                               <TableCell className="max-w-[180px] truncate">
                                 {xml?.nome_destinatario || "—"}
                               </TableCell>
@@ -1895,7 +1912,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                             </TableRow>
                             {expandedUploadBoleto === boleto.id && (
                               <TableRow>
-                                <TableCell colSpan={7} className="p-0">
+                                <TableCell colSpan={8} className="p-0">
                                   <div className="bg-muted/30 p-4 space-y-4">
                                     {previewBlobUrls[`boleto-${boleto.id}`] ? (
                                       <div className="space-y-2">
@@ -2323,9 +2340,9 @@ function OperationEditor({ tabId }: { tabId: string }) {
               {operacaoCreatedAt && (
                 <span>Criada em {formatDate(operacaoCreatedAt)}</span>
               )}
-              {operacao?.versao_finalizacao && (
+              {versaoFinalizacao && (
                 <Badge variant="outline" className="text-[10px] font-normal">
-                  Finalizada na v{operacao.versao_finalizacao}
+                  Finalizada na v{versaoFinalizacao}
                 </Badge>
               )}
             </div>

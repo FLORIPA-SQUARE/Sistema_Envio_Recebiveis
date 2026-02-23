@@ -142,7 +142,8 @@ def agrupar_boletos_para_envio(
                 elif boleto.pagador:
                     nome_cliente = boleto.pagador
 
-        # Gerar assunto e corpo
+        # Gerar assunto e corpo (deduplicar NFs de parcelas)
+        numeros_nf = list(dict.fromkeys(numeros_nf))
         assunto = gerar_assunto(numeros_nf)
         layout_kwargs = {}
         if email_layout:

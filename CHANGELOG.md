@@ -5,6 +5,17 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.8.1] - 2026-02-23
+
+### Corrigido
+- Runtime error `operacao is not defined` na tela Nova Operacao ao exibir versao de finalizacao
+- NFs duplicadas no assunto e corpo do email quando boleto tem parcelas (ex: "notas: 320318, 320318")
+- Coluna Status em "Boletos Carregados" nao atualizava apos processamento (faltava sync do state)
+
+### Alterado
+- Coluna Status em "Boletos Carregados" agora sempre visivel (mostra "—" antes de processar, badges apos)
+- Tooltip no header Status: "Status é mostrado pós processamento"
+
 ## [1.8.0] - 2026-02-23
 
 ### Adicionado

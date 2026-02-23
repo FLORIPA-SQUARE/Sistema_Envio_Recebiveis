@@ -2,7 +2,7 @@
 
 > **Ultima atualizacao:** 2026-02-23
 > **Sessao:** Implementacao M1-M7 + Aprimoramentos A01-A06
-> **Versao atual:** v1.8.0
+> **Versao atual:** v1.8.1
 > **Fonte de verdade:** `docs/prd/PRD-001-Especificacao.md`
 
 ---
@@ -127,8 +127,8 @@
 - [x] **#A02 (v1.7.0):** Legenda de cores acima da tabela de resultados (aprovado, parcial, rejeitado, juros)
 - [x] **#A02 (v1.7.0):** Separadores visuais por pagador e ordenacao automatica (pagador → NF → vencimento)
 - [x] **#A02 (v1.7.0):** Endpoint /version agora le VERSION dinamicamente (sem restart)
-- [x] **#A06 (v1.8.0):** Usuario responsavel na pagina de Auditoria (coluna Responsavel)
-- [x] **#A06 (v1.8.0):** Versao de finalizacao — campo registrado ao finalizar, exibido no Historico e Nova Operacao
+- [x] **#A06 (v1.8.1):** Usuario responsavel na pagina de Auditoria (coluna Responsavel)
+- [x] **#A06 (v1.8.1):** Versao de finalizacao — campo registrado ao finalizar, exibido no Historico e Nova Operacao
 
 ---
 
@@ -311,9 +311,10 @@ npm run dev                                  # http://localhost:5555
 ### Projeto COMPLETO (M1-M7) + Aprimoramentos A01-A06 — Em uso producao (rede local)
 
 Todas as fases de desenvolvimento foram concluidas com sucesso.
-O sistema esta funcional e em uso na rede local. Versao atual: **v1.8.0**.
+O sistema esta funcional e em uso na rede local. Versao atual: **v1.8.1**.
 
 **Ultimos commits:**
+- `950dedc` feat: usuario responsavel na auditoria e versao de finalizacao — **v1.8.1**
 - `7550f9d` feat: status parcialmente aprovado, legenda de cores e agrupamento visual — **v1.7.0**
 - `ee4cb58` fix: corrigir extracao de NF no extrator Novax — **v1.6.2**
 - `879c990` security: corrigir vulnerabilidades criticas
@@ -327,6 +328,7 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.8.0**.
 - `ac19866` feat: adicionar indicador de historico de versoes (#A06) — **v1.1.0**
 
 **Bugs corrigidos recentemente:**
+- **v1.8.1:** Runtime error `operacao is not defined`, NFs duplicadas no email (parcelas), coluna Status em Boletos Carregados sempre visivel e sincronizada
 - **v1.7.0:** Status parcialmente aprovado (badge azul), legenda de cores, separadores por pagador, ordenacao automatica
 - **v1.6.2:** Extrator Novax nao extraia NF — header "N do Documento" nao detectado (34/34 boletos rejeitados → 34/34 aprovados)
 - **v1.6.1:** Erro 500 no upload de boletos para FIDCs novas — GenericExtractor como fallback
@@ -367,6 +369,9 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.8.0**.
 | Saudacao email | Automatica por horario | Bom dia (0-12h), Boa tarde (13-18h), Boa noite (19-23h) |
 | Versionamento | Semantic Versioning | Arquivo `VERSION` na raiz, tags git, CHANGELOG.md |
 | Version caching | Parcial | Backend le VERSION dinamicamente via endpoint; frontend le no build (next.config.ts) |
+| NF deduplication | dict.fromkeys() | Preserva ordem de insercao, remove duplicatas de parcelas no assunto e corpo do email |
+| State nova-operacao | States separados | Nao existe objeto `operacao` unico; dados distribuidos em useState individuais |
+| Status col condicional | hasProcessed flag | Coluna Status em "Boletos Carregados" so aparece apos processamento |
 
 ---
 
@@ -392,7 +397,7 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.8.0**.
 
 ## 8. VERSIONAMENTO
 
-### Versao Atual: 1.8.0
+### Versao Atual: 1.8.1
 
 O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 - **MAJOR** (X.0.0): Mudancas incompativeis (schema DB, API breaking changes)
@@ -430,3 +435,4 @@ O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 | v1.6.1 | 73eab85 | 2026-02-16 | Extrator generico como fallback para FIDCs novas |
 | v1.6.2 | ee4cb58 | 2026-02-23 | Fix extracao NF extrator Novax |
 | v1.7.0 | 7550f9d | 2026-02-23 | Status parcial, legenda cores, separadores pagador (#A02) |
+| v1.8.1 | 950dedc | 2026-02-23 | Usuario responsavel na auditoria + versao de finalizacao (#A06) |

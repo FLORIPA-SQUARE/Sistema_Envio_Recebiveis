@@ -53,7 +53,7 @@ def gerar_email_html(
         saudacao = _saudacao_por_horario()
 
     # Lista de NFs
-    nfs_lista = ", ".join(b["numero_nota"] for b in boletos_info if b.get("numero_nota"))
+    nfs_lista = ", ".join(dict.fromkeys(b["numero_nota"] for b in boletos_info if b.get("numero_nota")))
 
     # Linhas de valor/vencimento
     linhas_valores = ""

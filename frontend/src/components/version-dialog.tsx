@@ -20,6 +20,16 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.8.1",
+    date: "2026-02-23",
+    summary: "Correcoes: operacao undefined, NF duplicada em emails, status boletos carregados",
+    items: [
+      "Fix: runtime error 'operacao is not defined' na tela Nova Operacao",
+      "Fix: NFs duplicadas no email quando boleto tem parcelas",
+      "Coluna Status em 'Boletos Carregados' sempre visivel e sincronizada apos processamento",
+    ],
+  },
+  {
     version: "1.8.0",
     date: "2026-02-23",
     summary: "Usuario responsavel na auditoria e versao de finalizacao (#A06)",

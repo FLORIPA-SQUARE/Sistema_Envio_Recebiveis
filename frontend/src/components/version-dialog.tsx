@@ -20,6 +20,17 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.9.1",
+    date: "2026-02-23",
+    summary: "Preview de email na configuracao de FIDCs (#A08)",
+    items: [
+      "Endpoint POST /fidcs/preview-email — renderiza template real com dados de exemplo",
+      "Botao 'Visualizar Email' na aba Texto de Email (preview do formulario em edicao)",
+      "Botao Eye no card do FIDC (preview com dados salvos)",
+      "Dialog de preview com iframe — identico ao email recebido pelo destinatario",
+    ],
+  },
+  {
     version: "1.9.0",
     date: "2026-02-23",
     summary: "Maquina de estados completa: aguardando_envio e enviada (#A05)",

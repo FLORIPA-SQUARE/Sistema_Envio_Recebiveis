@@ -3,10 +3,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.email_layout import EmailLayout
 from app.models.fidc import Fidc
 from app.models.usuario import Usuario
-from app.schemas.fidc import FidcCreate, FidcResponse, FidcUpdate
+from app.schemas.fidc import (
+    FidcCreate,
+    FidcEmailPreviewRequest,
+    FidcEmailPreviewResponse,
+    FidcResponse,
+    FidcUpdate,
+)
 from app.security import get_current_user
+from app.services.email_template import gerar_email_html
 
 router = APIRouter(prefix="/fidcs", tags=["fidcs"])
 
@@ -43,6 +51,61 @@ async def create_fidc(
     await db.commit()
     await db.refresh(fidc)
     return FidcResponse.model_validate(fidc)
+
+
+_SAMPLE_BOLETOS = [
+    {
+        "numero_nota": "12345",
+        "valor_formatado": "R$ 1.500,00",
+        "vencimento_completo": "15/03/2026",
+    },
+    {
+        "numero_nota": "12346",
+        "valor_formatado": "R$ 2.300,00",
+        "vencimento_completo": "20/03/2026",
+    },
+]
+
+
+@router.post("/preview-email", response_model=FidcEmailPreviewResponse)
+async def preview_email_fidc(
+    body: FidcEmailPreviewRequest,
+    db: AsyncSession = Depends(get_db),
+    _current_user: Usuario = Depends(get_current_user),
+):
+    """Gera preview HTML do email com dados de exemplo e textos do FIDC."""
+    # Buscar layout ativo para fallback (mesma logica do envio real)
+    layout_result = await db.execute(
+        select(EmailLayout).where(EmailLayout.ativo == True)
+    )
+    active_layout = layout_result.scalar_one_or_none()
+
+    # Construir kwargs: layout ativo → FIDC override → defaults de gerar_email_html
+    kwargs: dict = {}
+    if active_layout:
+        if active_layout.introducao:
+            kwargs["introducao"] = active_layout.introducao
+        if active_layout.mensagem_fechamento:
+            kwargs["mensagem_fechamento"] = active_layout.mensagem_fechamento
+        if active_layout.assinatura_nome:
+            kwargs["assinatura_nome"] = active_layout.assinatura_nome
+
+    if body.email_introducao and body.email_introducao.strip():
+        kwargs["introducao"] = body.email_introducao.strip()
+    if body.email_mensagem_fechamento and body.email_mensagem_fechamento.strip():
+        kwargs["mensagem_fechamento"] = body.email_mensagem_fechamento.strip()
+    if body.email_assinatura_nome and body.email_assinatura_nome.strip():
+        kwargs["assinatura_nome"] = body.email_assinatura_nome.strip()
+
+    html = gerar_email_html(
+        nome_cliente="EMPRESA EXEMPLO LTDA",
+        boletos_info=_SAMPLE_BOLETOS,
+        nome_fidc_completo=body.nome_completo or "FIDC EXEMPLO",
+        cnpj_fidc=body.cnpj or "00.000.000/0001-00",
+        **kwargs,
+    )
+
+    return FidcEmailPreviewResponse(html=html)
 
 
 @router.put("/{fidc_id}", response_model=FidcResponse)

@@ -5,6 +5,15 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.9.1] - 2026-02-23
+
+### Adicionado
+- Preview de email na configuracao de FIDCs — visualiza template real com dados de exemplo (#A08)
+- Endpoint POST /fidcs/preview-email com cadeia de prioridade: layout global → override FIDC → defaults
+- Botao "Visualizar Email" na aba Texto de Email do dialog de edicao (preview dos valores do formulario)
+- Botao Eye no card do FIDC (preview com dados salvos)
+- Dialog de preview com iframe renderizando HTML identico ao email enviado
+
 ## [1.9.0] - 2026-02-23
 
 ### Adicionado

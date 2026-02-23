@@ -32,6 +32,7 @@ import {
   PowerOff,
   X,
   Loader2,
+  Eye,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -83,6 +84,11 @@ export default function FidcsPage() {
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
+
+  // Preview state
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string>("");
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Chip inputs
   const [emailInput, setEmailInput] = useState("");
@@ -236,6 +242,58 @@ export default function FidcsPage() {
   const hasCustomEmail = (f: Fidc) =>
     !!(f.email_introducao || f.email_mensagem_fechamento || f.email_assinatura_nome);
 
+  async function handlePreview() {
+    setPreviewLoading(true);
+    try {
+      const data = await apiFetch<{ html: string }>("/fidcs/preview-email", {
+        method: "POST",
+        body: JSON.stringify({
+          nome_completo: form.nome_completo || "FIDC EXEMPLO",
+          cnpj: form.cnpj || null,
+          email_introducao: form.email_introducao || null,
+          email_mensagem_fechamento: form.email_mensagem_fechamento || null,
+          email_assinatura_nome: form.email_assinatura_nome || null,
+        }),
+      });
+      const html = data.html.replace(
+        /src="cid:assinatura_jj"/g,
+        'src="/api/v1/assets/assinatura.jpg"'
+      );
+      setPreviewHtml(html);
+      setPreviewOpen(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar preview");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  async function handlePreviewFromCard(fidc: Fidc) {
+    setPreviewLoading(true);
+    try {
+      const data = await apiFetch<{ html: string }>("/fidcs/preview-email", {
+        method: "POST",
+        body: JSON.stringify({
+          nome_completo: fidc.nome_completo,
+          cnpj: fidc.cnpj || null,
+          email_introducao: fidc.email_introducao || null,
+          email_mensagem_fechamento: fidc.email_mensagem_fechamento || null,
+          email_assinatura_nome: fidc.email_assinatura_nome || null,
+        }),
+      });
+      const html = data.html.replace(
+        /src="cid:assinatura_jj"/g,
+        'src="/api/v1/assets/assinatura.jpg"'
+      );
+      setPreviewHtml(html);
+      setPreviewOpen(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar preview");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground py-12 justify-center">
@@ -306,6 +364,15 @@ export default function FidcsPage() {
                 </CardDescription>
               </div>
               <div className="flex gap-1 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handlePreviewFromCard(fidc)}
+                  disabled={previewLoading}
+                  title="Visualizar email"
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -656,6 +723,24 @@ export default function FidcsPage() {
                   placeholder="(Usar padrao global)"
                 />
               </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-2"
+                onClick={handlePreview}
+                disabled={previewLoading}
+              >
+                {previewLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+                Visualizar Email
+              </Button>
+              <p className="text-xs text-muted-foreground text-center -mt-2">
+                Preview com dados de exemplo
+              </p>
             </TabsContent>
           </Tabs>
 
@@ -675,6 +760,31 @@ export default function FidcsPage() {
               ) : (
                 "Salvar"
               )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Preview Dialog */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Preview do Email</DialogTitle>
+            <DialogDescription>
+              Visualizacao do email com dados de exemplo
+            </DialogDescription>
+          </DialogHeader>
+          <div className="border rounded-md overflow-hidden bg-white" style={{ height: "60vh" }}>
+            <iframe
+              srcDoc={previewHtml}
+              sandbox="allow-same-origin"
+              className="w-full h-full border-0"
+              title="Email preview"
+            />
+          </div>
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+              Fechar
             </Button>
           </div>
         </DialogContent>

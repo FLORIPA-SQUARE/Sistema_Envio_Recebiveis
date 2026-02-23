@@ -44,3 +44,15 @@ class FidcUpdate(BaseModel):
     email_introducao: str | None = None
     email_mensagem_fechamento: str | None = None
     email_assinatura_nome: str | None = None
+
+
+class FidcEmailPreviewRequest(BaseModel):
+    nome_completo: str = "FIDC EXEMPLO"
+    cnpj: str | None = None
+    email_introducao: str | None = None
+    email_mensagem_fechamento: str | None = None
+    email_assinatura_nome: str | None = None
+
+
+class FidcEmailPreviewResponse(BaseModel):
+    html: str

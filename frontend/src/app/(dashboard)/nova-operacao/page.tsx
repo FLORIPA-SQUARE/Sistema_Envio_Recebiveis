@@ -405,7 +405,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
             .then((data) => setAtividade(data.items))
             .catch(() => {});
           // Determinar step
-          if (tab.step === "resultado" && op.status === "concluida") {
+          if (tab.step === "resultado" && (op.status === "concluida" || op.status === "enviada")) {
             setStep("resultado");
           } else {
             setStep("processamento");
@@ -687,6 +687,18 @@ function OperationEditor({ tabId }: { tabId: string }) {
     }
   }
 
+  // -- Refresh status da operacao --
+
+  async function refreshOperacaoStatus() {
+    if (!operacaoId) return;
+    try {
+      const op = await apiFetch<OperacaoDetalhada>(`/operacoes/${operacaoId}`);
+      setOperacaoStatus(op.status);
+    } catch {
+      // Silently ignore — status will be stale but not broken
+    }
+  }
+
   // -- Process --
 
   async function handleProcess() {
@@ -703,7 +715,8 @@ function OperationEditor({ tabId }: { tabId: string }) {
       toast.success(
         `Processamento concluido: ${result.aprovados} aprovados, ${result.rejeitados} rejeitados`
       );
-      // Carregar preview de envio apos processar
+      // Atualizar status da operacao e carregar preview de envio
+      await refreshOperacaoStatus();
       await fetchEnvioPreview();
     } catch {
       toast.error("Erro ao processar operacao");
@@ -800,6 +813,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
         toast.success(`${data.emails_enviados} email(s) enviado(s)`);
       }
       await fetchEnvios();
+      await refreshOperacaoStatus();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao enviar");
     } finally {
@@ -814,6 +828,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
       });
       toast.success("Email enviado via SMTP");
       await fetchEnvios();
+      await refreshOperacaoStatus();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao enviar email");
     }
@@ -829,6 +844,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
       );
       toast.success(`${data.emails_enviados} email(s) enviado(s) via SMTP`);
       await fetchEnvios();
+      await refreshOperacaoStatus();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao enviar emails");
     } finally {
@@ -1002,6 +1018,8 @@ function OperationEditor({ tabId }: { tabId: string }) {
       setResultado(result);
       setUploadedBoletos(result.boletos);
       toast.success(`Reprocessamento: ${result.aprovados} aprovados, ${result.rejeitados} rejeitados`);
+      await refreshOperacaoStatus();
+      await fetchEnvioPreview();
     } catch {
       toast.error("Erro ao reprocessar");
     } finally {
@@ -1249,6 +1267,16 @@ function OperationEditor({ tabId }: { tabId: string }) {
           {operacaoId && operacaoStatus === "em_processamento" && (
             <Badge className="bg-warning text-warning-foreground hover:bg-warning/90">
               Em Processamento
+            </Badge>
+          )}
+          {operacaoId && operacaoStatus === "aguardando_envio" && (
+            <Badge className="bg-blue-500 text-white hover:bg-blue-500/90">
+              Aguardando Envio
+            </Badge>
+          )}
+          {operacaoId && operacaoStatus === "enviada" && (
+            <Badge className="bg-indigo-600 text-white hover:bg-indigo-600/90">
+              Enviada
             </Badge>
           )}
           {operacaoId && operacaoStatus === "concluida" && (
@@ -2372,17 +2400,27 @@ function OperationEditor({ tabId }: { tabId: string }) {
               <Button
                 size="icon"
                 onClick={() => setConfirmDialog("finalizar")}
-                disabled={actionLoading}
-                title="Finalizar e Enviar dados para auditoria"
+                disabled={actionLoading || !["enviada", "em_processamento"].includes(operacaoStatus)}
+                title={
+                  operacaoStatus === "enviada"
+                    ? "Finalizar e Enviar dados para auditoria"
+                    : operacaoStatus === "em_processamento"
+                    ? "Finalizar operação (emails pendentes)"
+                    : "Envie todos os emails antes de finalizar"
+                }
               >
                 <CheckCheck className="h-4 w-4" />
               </Button>
               <Button
                 size="icon"
                 onClick={() => setConfirmDialog("cancelar")}
-                disabled={actionLoading}
+                disabled={actionLoading || !["em_processamento", "aguardando_envio"].includes(operacaoStatus)}
                 className="bg-warning text-warning-foreground hover:bg-warning/90"
-                title="Cancelar — Descarta a operação sem enviar para auditoria"
+                title={
+                  ["em_processamento", "aguardando_envio"].includes(operacaoStatus)
+                    ? "Cancelar — Descarta a operação sem enviar para auditoria"
+                    : "Operação não pode ser cancelada neste estado"
+                }
               >
                 <Ban className="h-4 w-4" />
               </Button>
@@ -3035,6 +3073,11 @@ function OperationEditor({ tabId }: { tabId: string }) {
             <DialogTitle>Finalizar e Enviar para Auditoria</DialogTitle>
             <DialogDescription>
               Ao finalizar, os dados da operacao serao enviados para auditoria, os relatorios serao gerados e a operacao nao podera mais ser editada.
+              {operacaoStatus === "em_processamento" && (
+                <span className="block mt-2 text-warning font-medium text-xs">
+                  Atenção: nenhum email foi enviado nesta operação.
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-3 mt-4">

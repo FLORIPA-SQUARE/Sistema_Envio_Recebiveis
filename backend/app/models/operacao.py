@@ -17,7 +17,7 @@ class Operacao(Base):
     usuario_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("usuarios.id"), nullable=False)
     status: Mapped[str] = mapped_column(
         String(30), nullable=False, default="em_processamento"
-    )  # em_processamento | enviando | concluida | cancelada
+    )  # em_processamento | aguardando_envio | enviada | concluida | cancelada
     modo_envio: Mapped[str] = mapped_column(String(20), nullable=False, default="preview")  # preview | automatico
     total_boletos: Mapped[int] = mapped_column(Integer, default=0)
     total_aprovados: Mapped[int] = mapped_column(Integer, default=0)

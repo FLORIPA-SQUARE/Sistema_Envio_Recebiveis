@@ -64,7 +64,7 @@ Seu trabalho deve seguir esta ordem. Não pule etapas.
 
 ## 7. Controle de Versão
 
-**Versão Atual: v1.8.2**
+**Versão Atual: v1.9.0**
 
 > **REGRA OBRIGATÓRIA:** A cada commit realizado (adição, correção ou reformulação),
 > o agente/desenvolvedor DEVE:

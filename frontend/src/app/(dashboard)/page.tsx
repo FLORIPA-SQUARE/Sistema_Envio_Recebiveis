@@ -72,6 +72,20 @@ function StatusBadge({ status }: { status: string }) {
       </Badge>
     );
   }
+  if (status === "aguardando_envio") {
+    return (
+      <Badge className="bg-blue-500 text-white hover:bg-blue-500/90">
+        Aguardando Envio
+      </Badge>
+    );
+  }
+  if (status === "enviada") {
+    return (
+      <Badge className="bg-indigo-600 text-white hover:bg-indigo-600/90">
+        Enviada
+      </Badge>
+    );
+  }
   if (status === "cancelada") {
     return <Badge variant="destructive">Cancelada</Badge>;
   }

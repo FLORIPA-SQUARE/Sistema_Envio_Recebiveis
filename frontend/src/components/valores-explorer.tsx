@@ -235,6 +235,8 @@ export function ValoresExplorer() {
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="em_processamento">Em Processamento</SelectItem>
+                <SelectItem value="aguardando_envio">Aguardando Envio</SelectItem>
+                <SelectItem value="enviada">Enviada</SelectItem>
                 <SelectItem value="concluida">Concluida</SelectItem>
                 <SelectItem value="cancelada">Cancelada</SelectItem>
               </SelectContent>

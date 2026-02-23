@@ -5,6 +5,25 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.9.0] - 2026-02-23
+
+### Adicionado
+- Maquina de estados completa para operacoes: em_processamento → aguardando_envio → enviada → concluida (#A05)
+- Status "aguardando_envio" (badge azul) automatico apos processar boletos aprovados
+- Status "enviada" (badge indigo) automatico quando todos os emails sao enviados com sucesso
+- Finalizacao agora requer que emails sejam enviados (guard no backend + botao desabilitado no frontend)
+- Cancelamento permitido de em_processamento e aguardando_envio
+- Helper _todos_enviados() para verificacao automatica de conclusao de envios
+- Sync de status da operacao apos cada acao (processar, reprocessar, enviar, confirmar)
+- Aviso no dialog de finalizacao para operacoes legadas sem emails enviados
+- Filtros de status atualizados no historico e explorador de valores
+
+### Alterado
+- Botao Finalizar desabilitado quando status nao e "enviada" ou "em_processamento" (retrocompat)
+- Botao Cancelar desabilitado quando status nao e "em_processamento" ou "aguardando_envio"
+- Guard do endpoint /enviar atualizado para aceitar "aguardando_envio" (e retrocompat "em_processamento")
+- Reprocessamento permitido de "aguardando_envio" (volta status para aguardando_envio ou em_processamento)
+
 ## [1.8.2] - 2026-02-23
 
 ### Corrigido

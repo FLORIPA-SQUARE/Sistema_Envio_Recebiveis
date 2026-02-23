@@ -149,6 +149,20 @@ async def _get_fidc(fidc_id: uuid.UUID, db: AsyncSession) -> Fidc:
     return fidc
 
 
+async def _todos_enviados(operacao_id: uuid.UUID, db: AsyncSession) -> bool:
+    """Retorna True se existe >=1 envio com status 'enviado'
+    e nenhum envio com status 'pendente' ou 'rascunho'."""
+    result = await db.execute(
+        select(Envio).where(Envio.operacao_id == operacao_id)
+    )
+    todos = result.scalars().all()
+    if not todos:
+        return False
+    has_enviado = any(e.status == "enviado" for e in todos)
+    no_pending = not any(e.status in ("pendente", "rascunho") for e in todos)
+    return has_enviado and no_pending
+
+
 # ── POST /operacoes ──────────────────────────────────────────
 
 
@@ -1063,6 +1077,13 @@ async def processar_operacao(
     _current_user: Usuario = Depends(get_current_user),
 ):
     op = await _get_operacao(op_id, db)
+
+    if op.status not in ("em_processamento", "aguardando_envio"):
+        raise HTTPException(
+            status_code=400,
+            detail="Apenas operacoes em processamento ou aguardando envio podem ser processadas",
+        )
+
     fidc = await _get_fidc(op.fidc_id, db)
 
     # Carregar XMLs da operação → mapa por número da nota
@@ -1200,6 +1221,12 @@ async def processar_operacao(
     )
     op.valor_bruto = valor_bruto_total if valor_bruto_total > 0 else None
 
+    # Auto-transicao de status baseada nos resultados
+    if aprovados > 0:
+        op.status = "aguardando_envio"
+    else:
+        op.status = "em_processamento"
+
     await registrar_audit(
         db, acao="processar_operacao", operacao_id=op.id,
         usuario_id=_current_user.id, entidade="operacao",
@@ -1229,10 +1256,10 @@ async def reprocessar_operacao(
     """Reprocessa apenas boletos com status 'rejeitado'."""
     op = await _get_operacao(op_id, db)
 
-    if op.status != "em_processamento":
+    if op.status not in ("em_processamento", "aguardando_envio", "enviada"):
         raise HTTPException(
             status_code=400,
-            detail="Apenas operacoes em processamento podem ser reprocessadas",
+            detail="Apenas operacoes em processamento, aguardando envio ou enviadas podem ser reprocessadas",
         )
 
     fidc = await _get_fidc(op.fidc_id, db)
@@ -1367,6 +1394,12 @@ async def reprocessar_operacao(
     )
     op.valor_bruto = valor_bruto_total if valor_bruto_total > 0 else None
 
+    # Recalcular status da operacao
+    if total_aprovados > 0:
+        op.status = "aguardando_envio"
+    else:
+        op.status = "em_processamento"
+
     await registrar_audit(
         db, acao="reprocessar_operacao", operacao_id=op.id,
         usuario_id=current_user.id, entidade="operacao",
@@ -1400,10 +1433,11 @@ async def finalizar_operacao(
     """Finaliza operacao: gera relatorios e muda status para concluida."""
     op = await _get_operacao(op_id, db)
 
-    if op.status != "em_processamento":
+    # Retrocompat: permite finalizar de em_processamento (ops legadas) ou enviada (novo fluxo)
+    if op.status not in ("enviada", "em_processamento"):
         raise HTTPException(
             status_code=400,
-            detail="Apenas operacoes em processamento podem ser finalizadas",
+            detail="Operacao deve estar com todos os emails enviados para ser finalizada. Status atual: " + op.status,
         )
 
     # Buscar boletos e XMLs
@@ -1481,10 +1515,10 @@ async def cancelar_operacao(
     """Cancela operacao (muda status para cancelada)."""
     op = await _get_operacao(op_id, db)
 
-    if op.status != "em_processamento":
+    if op.status not in ("em_processamento", "aguardando_envio"):
         raise HTTPException(
             status_code=400,
-            detail="Apenas operacoes em processamento podem ser canceladas",
+            detail="Apenas operacoes em processamento ou aguardando envio podem ser canceladas",
         )
 
     op.status = "cancelada"
@@ -1547,10 +1581,10 @@ async def enviar_operacao(
     """Envia boletos aprovados via SMTP (preview = rascunho no banco, automatico = envio direto)."""
     op = await _get_operacao(op_id, db)
 
-    if op.status not in ("em_processamento", "concluida"):
+    if op.status not in ("aguardando_envio", "em_processamento", "enviada"):
         raise HTTPException(
             status_code=400,
-            detail="Operacao deve estar em processamento ou concluida para enviar",
+            detail="Operacao deve estar aguardando envio para enviar emails",
         )
 
     if body.modo not in ("preview", "automatico"):
@@ -1681,6 +1715,11 @@ async def enviar_operacao(
     )
     await db.commit()
 
+    # Auto-transicao: se todos os envios estao enviados, marcar operacao como enviada
+    if await _todos_enviados(op.id, db):
+        op.status = "enviada"
+        await db.commit()
+
     return EnvioResultado(
         emails_criados=len(grupos),
         emails_enviados=emails_enviados,
@@ -1767,6 +1806,12 @@ async def confirmar_envio(
         detalhes={"status": envio.status},
     )
     await db.commit()
+
+    # Auto-transicao: se todos os envios da operacao foram enviados
+    if await _todos_enviados(op.id, db):
+        op.status = "enviada"
+        await db.commit()
+
     await db.refresh(envio)
 
     return EnvioResponse.model_validate(envio)
@@ -1839,6 +1884,11 @@ async def confirmar_todos_envios(
         },
     )
     await db.commit()
+
+    # Auto-transicao: se todos os envios da operacao foram enviados
+    if await _todos_enviados(op.id, db):
+        op.status = "enviada"
+        await db.commit()
 
     return EnvioResultado(
         emails_criados=len(rascunhos),
@@ -1932,6 +1982,13 @@ async def atualizar_status_envio(
     )
 
     await db.commit()
+
+    # Auto-transicao: se marcou como enviado e todos os envios estao concluidos
+    if body.status == "enviado" and await _todos_enviados(uuid.UUID(op_id), db):
+        op = await _get_operacao(op_id, db)
+        op.status = "enviada"
+        await db.commit()
+
     await db.refresh(envio)
 
     return EnvioResponse.model_validate(envio)

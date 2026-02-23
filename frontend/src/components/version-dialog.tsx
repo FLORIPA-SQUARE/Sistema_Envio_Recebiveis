@@ -20,6 +20,18 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.9.0",
+    date: "2026-02-23",
+    summary: "Maquina de estados completa: aguardando_envio e enviada (#A05)",
+    items: [
+      "Status 'aguardando_envio' automatico apos processar boletos aprovados",
+      "Status 'enviada' automatico quando todos os emails sao enviados",
+      "Finalizacao requer envio de emails (guard backend + botao desabilitado)",
+      "Badges e filtros atualizados em todas as telas (historico, dashboard, explorer)",
+      "Retrocompatibilidade: operacoes legadas em_processamento ainda podem ser finalizadas",
+    ],
+  },
+  {
     version: "1.8.2",
     date: "2026-02-23",
     summary: "SMTP async, badge de status dinamico na nova-operacao",

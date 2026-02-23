@@ -65,7 +65,8 @@ interface OperacoesPaginadas {
 
 const STATUS_LABELS: Record<string, { label: string; variant: string }> = {
   em_processamento: { label: "Em Processamento", variant: "outline" },
-  enviando: { label: "Enviando", variant: "outline" },
+  aguardando_envio: { label: "Aguardando Envio", variant: "outline" },
+  enviada: { label: "Enviada", variant: "outline" },
   concluida: { label: "Concluida", variant: "default" },
   cancelada: { label: "Cancelada", variant: "destructive" },
 };
@@ -83,6 +84,20 @@ function StatusBadge({ status }: { status: string }) {
   if (status === "em_processamento") {
     return (
       <Badge className="bg-warning text-warning-foreground hover:bg-warning/90">
+        {config.label}
+      </Badge>
+    );
+  }
+  if (status === "aguardando_envio") {
+    return (
+      <Badge className="bg-blue-500 text-white hover:bg-blue-500/90">
+        {config.label}
+      </Badge>
+    );
+  }
+  if (status === "enviada") {
+    return (
+      <Badge className="bg-indigo-600 text-white hover:bg-indigo-600/90">
         {config.label}
       </Badge>
     );
@@ -285,6 +300,8 @@ export default function HistoricoPage() {
                 <SelectContent>
                   <SelectItem value="all">Todos os status</SelectItem>
                   <SelectItem value="em_processamento">Em Processamento</SelectItem>
+                  <SelectItem value="aguardando_envio">Aguardando Envio</SelectItem>
+                  <SelectItem value="enviada">Enviada</SelectItem>
                   <SelectItem value="concluida">Concluida</SelectItem>
                   <SelectItem value="cancelada">Cancelada</SelectItem>
                 </SelectContent>

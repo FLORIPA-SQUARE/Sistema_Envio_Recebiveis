@@ -5,6 +5,13 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.6.2] - 2026-02-23
+
+### Corrigido
+- Extrator Novax nao extraia numero da nota fiscal dos boletos (header "N do Documento" nao era detectado)
+- Todos os boletos Novax eram rejeitados com "XML nao encontrado para nota ?" mesmo com XMLs presentes
+- Adicionada deteccao especifica do header abreviado Novax e regex para formato 6+3 digitos sem separador
+
 ## [1.6.1] - 2026-02-16
 
 ### Corrigido

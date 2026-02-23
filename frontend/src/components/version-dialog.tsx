@@ -20,6 +20,15 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.6.2",
+    date: "2026-02-23",
+    summary: "Correcao: extrator Novax nao vinculava boletos a notas fiscais",
+    items: [
+      "Corrigido header 'N do Documento' nao detectado pelo extrator Novax",
+      "Boletos Novax agora extraem corretamente o numero da NF (formato 6+3 digitos)",
+    ],
+  },
+  {
     version: "1.6.1",
     date: "2026-02-16",
     summary: "Correcao: upload de boletos para FIDCs novas",

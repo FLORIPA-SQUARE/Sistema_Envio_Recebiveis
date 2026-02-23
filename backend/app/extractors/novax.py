@@ -82,7 +82,17 @@ class NovaxExtractor(BaseExtractor):
         return None
 
     def _extrair_numero_nota(self, linhas: list[str]) -> str | None:
-        # Novax: Número do Documento (remove /001)
+        # Novax: header abreviado "N do Documento" (nao contem "Numero")
+        for i, linha in enumerate(linhas):
+            upper = linha.upper()
+            if "N DO DOCUMENTO" in upper:
+                for j in range(i, min(i + 4, len(linhas))):
+                    # Formato Novax: 320214001 = NF(6 digitos) + sufixo(3 digitos)
+                    match = re.search(r"(?<!\d)(\d{6})(?:\d{3}|/\d{3})(?!\d)", linhas[j])
+                    if match:
+                        return match.group(1)
+
+        # Fallback: metodo base (header "NUMERO DO DOCUMENTO")
         nota = self.extrair_numero_documento(linhas)
         if nota:
             return nota

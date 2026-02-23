@@ -20,6 +20,18 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.7.0",
+    date: "2026-02-23",
+    summary: "Status parcialmente aprovado, legenda de cores e agrupamento visual (#A02)",
+    items: [
+      "Badge azul 'Parcial' para boletos com divergencia de valor (parcela) ou nome parcial",
+      "Legenda de cores (aprovado, parcial, rejeitado, juros) acima da tabela de resultados",
+      "Separadores visuais por pagador substituem bordas laterais coloridas",
+      "Ordenacao automatica por pagador, NF e vencimento",
+      "Endpoint de versao agora le dinamicamente (sem restart)",
+    ],
+  },
+  {
     version: "1.6.2",
     date: "2026-02-23",
     summary: "Correcao: extrator Novax nao vinculava boletos a notas fiscais",

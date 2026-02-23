@@ -572,7 +572,7 @@ async def preview_envio(
     boletos_result = await db.execute(
         select(Boleto)
         .where(Boleto.operacao_id == op.id)
-        .where(Boleto.status == "aprovado")
+        .where(Boleto.status.in_(["aprovado", "parcialmente_aprovado"]))
     )
     boletos_aprovados = boletos_result.scalars().all()
 
@@ -1160,8 +1160,12 @@ async def processar_operacao(
         boleto.validacao_camada4 = _camada_to_dict(camadas.get(4))
         boleto.validacao_camada5 = _camada_to_dict(camadas.get(5))
 
-        if resultado.aprovado:
+        if resultado.aprovado and not resultado.parcialmente_aprovado:
             boleto.status = "aprovado"
+            aprovados += 1
+        elif resultado.parcialmente_aprovado:
+            boleto.status = "parcialmente_aprovado"
+            boleto.motivo_rejeicao = resultado.motivo_parcial
             aprovados += 1
         else:
             boleto.status = "rejeitado"
@@ -1186,10 +1190,10 @@ async def processar_operacao(
     op.total_rejeitados = rejeitados
     op.taxa_sucesso = (aprovados / total * 100) if total > 0 else 0.0
 
-    # Computar valor bruto (soma dos boletos aprovados)
+    # Computar valor bruto (soma dos boletos aprovados + parcialmente aprovados)
     valor_bruto_total = sum(
         b.valor for b in boletos
-        if b.status == "aprovado" and b.valor is not None
+        if b.status in ("aprovado", "parcialmente_aprovado") and b.valor is not None
     )
     op.valor_bruto = valor_bruto_total if valor_bruto_total > 0 else None
 
@@ -1315,9 +1319,16 @@ async def reprocessar_operacao(
         boleto.validacao_camada4 = _camada_to_dict(camadas.get(4))
         boleto.validacao_camada5 = _camada_to_dict(camadas.get(5))
 
-        if resultado.aprovado:
+        if resultado.aprovado and not resultado.parcialmente_aprovado:
             boleto.status = "aprovado"
             boleto.motivo_rejeicao = None
+            novos_aprovados += 1
+            if boleto.arquivo_path:
+                _renomear_arquivo(Path(boleto.arquivo_path), nome_renomeado)
+                boleto.arquivo_path = str(Path(boleto.arquivo_path).parent / nome_renomeado)
+        elif resultado.parcialmente_aprovado:
+            boleto.status = "parcialmente_aprovado"
+            boleto.motivo_rejeicao = resultado.motivo_parcial
             novos_aprovados += 1
             if boleto.arquivo_path:
                 _renomear_arquivo(Path(boleto.arquivo_path), nome_renomeado)
@@ -1337,7 +1348,7 @@ async def reprocessar_operacao(
         select(Boleto).where(Boleto.operacao_id == op.id)
     )
     all_boletos = all_boletos_result.scalars().all()
-    total_aprovados = sum(1 for b in all_boletos if b.status == "aprovado")
+    total_aprovados = sum(1 for b in all_boletos if b.status in ("aprovado", "parcialmente_aprovado"))
     total_rejeitados = sum(1 for b in all_boletos if b.status == "rejeitado")
     total = len(all_boletos)
 
@@ -1346,10 +1357,10 @@ async def reprocessar_operacao(
     op.total_rejeitados = total_rejeitados
     op.taxa_sucesso = (total_aprovados / total * 100) if total > 0 else 0.0
 
-    # Recalcular valor bruto (soma dos boletos aprovados)
+    # Recalcular valor bruto (soma dos boletos aprovados + parcialmente aprovados)
     valor_bruto_total = sum(
         b.valor for b in all_boletos
-        if b.status == "aprovado" and b.valor is not None
+        if b.status in ("aprovado", "parcialmente_aprovado") and b.valor is not None
     )
     op.valor_bruto = valor_bruto_total if valor_bruto_total > 0 else None
 
@@ -1405,7 +1416,7 @@ async def finalizar_operacao(
     xmls_map = {str(x.id): x for x in xmls}
 
     # Separar aprovados e rejeitados
-    aprovados = [b for b in todos_boletos if b.status == "aprovado"]
+    aprovados = [b for b in todos_boletos if b.status in ("aprovado", "parcialmente_aprovado")]
     rejeitados = [b for b in todos_boletos if b.status == "rejeitado"]
 
     relatorio_gerado = False
@@ -1545,7 +1556,7 @@ async def enviar_operacao(
     boletos_result = await db.execute(
         select(Boleto)
         .where(Boleto.operacao_id == op.id)
-        .where(Boleto.status == "aprovado")
+        .where(Boleto.status.in_(["aprovado", "parcialmente_aprovado"]))
     )
     boletos_aprovados = boletos_result.scalars().all()
 

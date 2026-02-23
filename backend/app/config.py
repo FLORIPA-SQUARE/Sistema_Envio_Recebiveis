@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     )
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://boletos_user:boletos_dev_2026@localhost:5432/boletos_db"
+    DATABASE_URL: str = "postgresql+asyncpg://boletos_user:boletos_dev_2026@localhost:5434/boletos_db"
 
     # JWT (obrigatório — definir no .env)
     JWT_SECRET_KEY: str

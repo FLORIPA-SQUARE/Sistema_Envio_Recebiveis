@@ -174,7 +174,7 @@ def gerar_relatorio_json(operacao, todos_boletos, xmls_map: dict) -> Path:
     filepath = _storage_auditoria() / filename
 
     agora = datetime.now(timezone.utc)
-    aprovados = [b for b in todos_boletos if b.status == "aprovado"]
+    aprovados = [b for b in todos_boletos if b.status in ("aprovado", "parcialmente_aprovado")]
     rejeitados = [b for b in todos_boletos if b.status == "rejeitado"]
     total = len(todos_boletos)
 

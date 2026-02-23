@@ -5,6 +5,21 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.7.0] - 2026-02-23
+
+### Adicionado
+- Status "parcialmente aprovado" (badge azul) para boletos com divergencia de valor por parcela ou nome parcial (#A02)
+- Deteccao automatica de parcelas: aceita boleto cujo valor e fracao razoavel do total da NF (2-12x)
+- Aprovacao parcial por nome: boletos com similaridade abaixo de 85% recebem status parcial ao inves de aprovado
+- Legenda de cores acima da tabela de resultados (aprovado, parcial, rejeitado, juros/multa) (#A02)
+- Separadores visuais por pagador na tabela de boletos (substitui bordas laterais coloridas)
+- Ordenacao automatica de boletos por pagador, NF e vencimento (rejeitados no final)
+- Endpoint /api/v1/version agora le o arquivo VERSION dinamicamente (sem necessidade de restart)
+
+### Alterado
+- Boletos parcialmente aprovados sao incluidos no envio de email, valor bruto e relatorios
+- Tabela de boletos carregados (etapa 2) agora usa mesma ordenacao e separadores da tabela de resultados
+
 ## [1.6.2] - 2026-02-23
 
 ### Corrigido

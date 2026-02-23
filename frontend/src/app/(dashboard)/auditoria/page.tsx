@@ -85,6 +85,13 @@ function StatusBadge({ status }: { status: string }) {
       </Badge>
     );
   }
+  if (status === "parcialmente_aprovado") {
+    return (
+      <Badge className="bg-blue-600 text-white hover:bg-blue-600/90">
+        Parcial
+      </Badge>
+    );
+  }
   if (status === "rejeitado") {
     return <Badge variant="destructive">Rejeitado</Badge>;
   }

@@ -24,6 +24,24 @@ SIMILARIDADE_MINIMA = 0.85
 MAX_EMAILS_POR_CLIENTE = 2
 
 
+def _eh_parcela(valor_boleto: float, valor_total_xml: float) -> bool:
+    """Detecta se valor do boleto é uma fração razoável do total (parcela).
+
+    Verifica se total_xml / valor_boleto ≈ inteiro (2-12).
+    Tolerância: 1 centavo por parcela.
+    """
+    if valor_boleto <= 0 or valor_total_xml <= 0:
+        return False
+    if valor_boleto >= valor_total_xml:
+        return False
+    ratio = valor_total_xml / valor_boleto
+    n = round(ratio)
+    if 2 <= n <= 12:
+        diff = abs(valor_total_xml - n * valor_boleto)
+        return diff <= n * 0.01
+    return False
+
+
 @dataclass
 class ResultadoCamada:
     """Resultado de uma camada de validação."""
@@ -41,7 +59,9 @@ class ResultadoValidacao:
     """Resultado completo da validação de 5 camadas."""
 
     aprovado: bool = True
+    parcialmente_aprovado: bool = False
     motivo_rejeicao: str | None = None
+    motivo_parcial: str | None = None
     camadas: list[ResultadoCamada] = field(default_factory=list)
     juros_detectado: bool = False
     juros_detalhes: dict = field(default_factory=dict)
@@ -49,7 +69,9 @@ class ResultadoValidacao:
     def to_dict(self) -> dict:
         return {
             "aprovado": self.aprovado,
+            "parcialmente_aprovado": self.parcialmente_aprovado,
             "motivo_rejeicao": self.motivo_rejeicao,
+            "motivo_parcial": self.motivo_parcial,
             "juros_detectado": self.juros_detectado,
             "juros_detalhes": self.juros_detalhes,
             "camadas": [
@@ -116,6 +138,31 @@ def validar_5_camadas(
     if c5.bloqueia:
         resultado.aprovado = False
         resultado.motivo_rejeicao = c5.mensagem
+
+    # ── Detecção de aprovação parcial ─────────────────────────
+    if resultado.aprovado:
+        # Caso: aprovado mas Layer 3 abaixo do threshold (nome parcial)
+        if not c3.aprovado:
+            resultado.parcialmente_aprovado = True
+            resultado.motivo_parcial = "Nome com similaridade abaixo de 85%"
+    else:
+        # Caso: rejeitado apenas por Layer 4 (valor) e é parcela
+        blocking_failures = [
+            c for c in resultado.camadas if not c.aprovado and c.bloqueia
+        ]
+        only_l4 = (
+            len(blocking_failures) == 1 and blocking_failures[0].camada == 4
+        )
+        if only_l4 and _eh_parcela(
+            dados_boleto.valor or 0, dados_xml.valor_total
+        ):
+            resultado.parcialmente_aprovado = True
+            resultado.aprovado = True  # override — parcela aceita
+            resultado.motivo_rejeicao = None
+            motivos = ["Valor divergente (parcela detectada)"]
+            if not c3.aprovado:
+                motivos.append("Nome com similaridade abaixo de 85%")
+            resultado.motivo_parcial = "; ".join(motivos)
 
     return resultado
 

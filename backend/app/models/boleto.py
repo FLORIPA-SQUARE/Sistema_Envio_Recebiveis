@@ -24,7 +24,7 @@ class Boleto(Base):
     valor: Mapped[float | None] = mapped_column(Float, nullable=True)
     valor_formatado: Mapped[str | None] = mapped_column(String(30), nullable=True)
     fidc_detectada: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    status: Mapped[str] = mapped_column(String(30), nullable=False, default="pendente")  # pendente | aprovado | rejeitado
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="pendente")  # pendente | aprovado | parcialmente_aprovado | rejeitado
     motivo_rejeicao: Mapped[str | None] = mapped_column(String(500), nullable=True)
     validacao_camada1: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     validacao_camada2: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

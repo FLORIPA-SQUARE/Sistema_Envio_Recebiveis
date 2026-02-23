@@ -378,7 +378,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
         setOperacaoCreatedAt(op.created_at);
 
         const foiProcessada = op.boletos.some((b: BoletoCompleto) =>
-          b.status === "aprovado" || b.status === "rejeitado"
+          b.status === "aprovado" || b.status === "parcialmente_aprovado" || b.status === "rejeitado"
         );
         if (foiProcessada) {
           // Restore resultado from operation data
@@ -1803,15 +1803,16 @@ function OperationEditor({ tabId }: { tabId: string }) {
             const xmlByNota = new Map(
               uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).map((x) => [(x.numero_nota || "").replace(/^0+/, "") || "0", x])
             );
-            // Agrupamento visual por NF
-            const nfGroups = new Map<string, number>();
-            uploadedBoletos.forEach(b => {
-              const nf = (b.numero_nota || "").replace(/^0+/, "") || "0";
-              nfGroups.set(nf, (nfGroups.get(nf) || 0) + 1);
+            // Ordenar boletos por pagador → NF → vencimento
+            const sortedUploadBoletos = [...uploadedBoletos].sort((a, b) => {
+              const pagA = (a.pagador || "").toUpperCase();
+              const pagB = (b.pagador || "").toUpperCase();
+              if (pagA !== pagB) return pagA.localeCompare(pagB);
+              const nfA = (a.numero_nota || "").replace(/^0+/, "");
+              const nfB = (b.numero_nota || "").replace(/^0+/, "");
+              if (nfA !== nfB) return nfA.localeCompare(nfB);
+              return (a.vencimento || "").localeCompare(b.vencimento || "");
             });
-            const groupColors = ["border-l-blue-500", "border-l-orange-500", "border-l-emerald-500", "border-l-purple-500"];
-            let colorIdx = 0;
-            const nfColorMap = new Map<string, string>();
 
             return (
               <Card>
@@ -1836,20 +1837,28 @@ function OperationEditor({ tabId }: { tabId: string }) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {uploadedBoletos.map((boleto) => {
+                      {sortedUploadBoletos.map((boleto, bIdx) => {
                         const nfKey = (boleto.numero_nota || "").replace(/^0+/, "") || "0";
                         const xml = xmlByNota.get(nfKey);
-                        const isGroup = (nfGroups.get(nfKey) || 0) > 1;
-                        let groupClass = "";
-                        if (isGroup) {
-                          if (!nfColorMap.has(nfKey)) { nfColorMap.set(nfKey, groupColors[colorIdx % groupColors.length]); colorIdx++; }
-                          groupClass = `border-l-4 ${nfColorMap.get(nfKey)}`;
-                        }
                         const parcela = getParcelaLabel(boleto, xml);
+                        const curPagador = (boleto.pagador || "SEM_PAGADOR").toUpperCase();
+                        const prevPagador = bIdx > 0 ? (sortedUploadBoletos[bIdx - 1].pagador || "SEM_PAGADOR").toUpperCase() : null;
+                        const showSeparator = bIdx > 0 && curPagador !== prevPagador;
                         return (
                           <Fragment key={boleto.id}>
+                            {showSeparator && (
+                              <TableRow className="pointer-events-none">
+                                <TableCell colSpan={7} className="py-1 px-0">
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <div className="flex-1 border-t" />
+                                    <span className="font-medium font-[family-name:var(--font-barlow-condensed)] whitespace-nowrap">{curPagador}</span>
+                                    <div className="flex-1 border-t" />
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
                             <TableRow
-                              className={`cursor-pointer hover:bg-muted/50 ${groupClass}`}
+                              className="cursor-pointer hover:bg-muted/50"
                               onClick={() => {
                                 const isExpanding = expandedUploadBoleto !== boleto.id;
                                 setExpandedUploadBoleto(isExpanding ? boleto.id : null);
@@ -2438,17 +2447,36 @@ function OperationEditor({ tabId }: { tabId: string }) {
                     const xmlByNota = new Map(
                       uploadedXmls.filter((x) => x.nome_arquivo.toLowerCase().endsWith(".xml")).map((x) => [(x.numero_nota || "").replace(/^0+/, "") || "0", x])
                     );
-                    // Agrupamento visual por NF
-                    const nfGroups = new Map<string, number>();
-                    resultado.boletos.forEach(b => {
-                      const nf = (b.numero_nota || "").replace(/^0+/, "") || "0";
-                      nfGroups.set(nf, (nfGroups.get(nf) || 0) + 1);
+                    // Ordenar boletos por pagador → NF → vencimento (rejeitados no final)
+                    const sortedBoletos = [...resultado.boletos].sort((a, b) => {
+                      if (a.status === "rejeitado" && b.status !== "rejeitado") return 1;
+                      if (a.status !== "rejeitado" && b.status === "rejeitado") return -1;
+                      const pagA = (a.pagador || "").toUpperCase();
+                      const pagB = (b.pagador || "").toUpperCase();
+                      if (pagA !== pagB) return pagA.localeCompare(pagB);
+                      const nfA = (a.numero_nota || "").replace(/^0+/, "");
+                      const nfB = (b.numero_nota || "").replace(/^0+/, "");
+                      if (nfA !== nfB) return nfA.localeCompare(nfB);
+                      return (a.vencimento || "").localeCompare(b.vencimento || "");
                     });
-                    const groupColors = ["border-l-blue-500", "border-l-orange-500", "border-l-emerald-500", "border-l-purple-500"];
-                    let colorIdx = 0;
-                    const nfColorMap = new Map<string, string>();
 
                     return (
+                    <>
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground mb-3">
+                      <span className="font-medium">Legenda:</span>
+                      <span className="inline-flex items-center gap-1">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-success" /> Aprovado
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-blue-600" /> Parcial
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <XCircle className="h-3.5 w-3.5 text-destructive" /> Rejeitado
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <AlertTriangle className="h-3.5 w-3.5 text-warning" /> Juros/multa
+                      </span>
+                    </div>
                     <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
@@ -2465,20 +2493,28 @@ function OperationEditor({ tabId }: { tabId: string }) {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {resultado.boletos.map((boleto) => {
+                        {sortedBoletos.map((boleto, bIdx) => {
                           const nfKey = (boleto.numero_nota || "").replace(/^0+/, "") || "0";
                           const xml = xmlByNota.get(nfKey);
-                          const isGroup = (nfGroups.get(nfKey) || 0) > 1;
-                          let groupClass = "";
-                          if (isGroup) {
-                            if (!nfColorMap.has(nfKey)) { nfColorMap.set(nfKey, groupColors[colorIdx % groupColors.length]); colorIdx++; }
-                            groupClass = `border-l-4 ${nfColorMap.get(nfKey)}`;
-                          }
                           const parcela = getParcelaLabel(boleto, xml);
+                          const curPagador = (boleto.pagador || "SEM_PAGADOR").toUpperCase();
+                          const prevPagador = bIdx > 0 ? (sortedBoletos[bIdx - 1].pagador || "SEM_PAGADOR").toUpperCase() : null;
+                          const showSeparator = bIdx > 0 && curPagador !== prevPagador;
                           return (
                           <Fragment key={boleto.id}>
+                            {showSeparator && (
+                              <TableRow className="pointer-events-none">
+                                <TableCell colSpan={9} className="py-1 px-0">
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <div className="flex-1 border-t" />
+                                    <span className="font-medium font-[family-name:var(--font-barlow-condensed)] whitespace-nowrap">{curPagador}</span>
+                                    <div className="flex-1 border-t" />
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
                             <TableRow
-                              className={`cursor-pointer hover:bg-muted/50 ${groupClass}`}
+                              className="cursor-pointer hover:bg-muted/50"
                               onClick={() =>
                                 setExpandedBoleto(
                                   expandedBoleto === boleto.id ? null : boleto.id
@@ -2496,6 +2532,8 @@ function OperationEditor({ tabId }: { tabId: string }) {
                                 <div className="flex items-center gap-1.5">
                                   {boleto.status === "aprovado" ? (
                                     <Badge className="bg-success text-success-foreground">Aprovado</Badge>
+                                  ) : boleto.status === "parcialmente_aprovado" ? (
+                                    <Badge className="bg-blue-600 text-white">Parcial</Badge>
                                   ) : (
                                     <Badge variant="destructive">Rejeitado</Badge>
                                   )}
@@ -2521,7 +2559,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                               <TableCell className="max-w-[200px] truncate text-sm">
                                 {xml && xml.emails.length > 0 ? xml.emails.join(", ") : "—"}
                               </TableCell>
-                              <TableCell className="max-w-[200px] truncate text-sm text-destructive">
+                              <TableCell className={`max-w-[200px] truncate text-sm ${boleto.status === "parcialmente_aprovado" ? "text-blue-600" : "text-destructive"}`}>
                                 {boleto.motivo_rejeicao || ""}
                               </TableCell>
                             </TableRow>
@@ -2591,6 +2629,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                       </TableBody>
                     </Table>
                     </div>
+                    </>
                     );
                   })()}
                 </CardContent>

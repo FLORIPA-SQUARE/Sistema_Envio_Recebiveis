@@ -25,6 +25,7 @@ class Operacao(Base):
     taxa_sucesso: Mapped[float] = mapped_column(Float, default=0.0)
     valor_bruto: Mapped[float | None] = mapped_column(Float, nullable=True)
     valor_liquido: Mapped[float | None] = mapped_column(Float, nullable=True)
+    versao_finalizacao: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

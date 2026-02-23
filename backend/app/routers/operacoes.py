@@ -100,6 +100,8 @@ from app.services.report_generator import (
 
 logger = logging.getLogger(__name__)
 
+_version_file = Path(__file__).resolve().parent.parent.parent.parent / "VERSION"
+
 router = APIRouter(prefix="/operacoes", tags=["operacoes"])
 
 ACAO_LABELS: dict[str, str] = {
@@ -1433,6 +1435,11 @@ async def finalizar_operacao(
 
     # Mudar status
     op.status = "concluida"
+    op.versao_finalizacao = (
+        _version_file.read_text(encoding="utf-8").strip()
+        if _version_file.exists()
+        else "unknown"
+    )
 
     await registrar_audit(
         db, acao="finalizar_operacao", operacao_id=op.id,
@@ -1456,6 +1463,7 @@ async def finalizar_operacao(
         taxa_sucesso=op.taxa_sucesso,
         valor_bruto=op.valor_bruto,
         valor_liquido=op.valor_liquido,
+        versao_finalizacao=op.versao_finalizacao,
         relatorio_gerado=relatorio_gerado,
     )
 

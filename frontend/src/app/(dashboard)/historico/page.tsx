@@ -51,6 +51,7 @@ interface Operacao {
   taxa_sucesso: number;
   valor_bruto: number | null;
   valor_liquido: number | null;
+  versao_finalizacao: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -354,7 +355,14 @@ export default function HistoricoPage() {
                         {formatDate(op.created_at)}
                       </TableCell>
                       <TableCell>
-                        <StatusBadge status={op.status} />
+                        <div className="flex flex-col items-start gap-0.5">
+                          <StatusBadge status={op.status} />
+                          {op.status === "concluida" && op.versao_finalizacao && (
+                            <span className="text-[10px] text-muted-foreground font-[family-name:var(--font-barlow-condensed)]">
+                              v{op.versao_finalizacao}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)]">
                         {op.total_boletos}

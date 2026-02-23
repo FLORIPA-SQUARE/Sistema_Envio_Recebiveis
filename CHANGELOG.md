@@ -5,6 +5,16 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.8.0] - 2026-02-23
+
+### Adicionado
+- Coluna "Responsavel" na pagina de Auditoria mostrando o usuario que criou a operacao (#A06)
+- Campo `versao_finalizacao` no modelo de operacao — registra a versao do sistema ao finalizar (#A06)
+- Versao exibida como subtexto no Historico (abaixo da badge de status) para operacoes concluidas
+- Badge "Finalizada na vX.Y.Z" na tela de Nova Operacao para operacoes concluidas
+- Opcao "Parcial" no filtro de status da Auditoria (parcialmente_aprovado)
+- Migration 005: campo versao_finalizacao na tabela operacoes
+
 ## [1.7.0] - 2026-02-23
 
 ### Adicionado

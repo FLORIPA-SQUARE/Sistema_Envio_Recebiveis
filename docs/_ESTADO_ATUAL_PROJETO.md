@@ -2,7 +2,7 @@
 
 > **Ultima atualizacao:** 2026-02-23
 > **Sessao:** Implementacao M1-M7 + Aprimoramentos A01-A06
-> **Versao atual:** v1.6.2
+> **Versao atual:** v1.8.0
 > **Fonte de verdade:** `docs/prd/PRD-001-Especificacao.md`
 
 ---
@@ -123,6 +123,12 @@
 - [x] **#A05 (v1.6.0):** Textos de email por FIDC — introducao, fechamento e assinatura personalizados (override do layout global)
 - [x] **Fix (v1.6.1):** Extrator generico como fallback para FIDCs novas sem extrator especializado
 - [x] **Fix (v1.6.2):** Extrator Novax nao extraia NF dos boletos — header abreviado "N do Documento" nao era detectado
+- [x] **#A02 (v1.7.0):** Status parcialmente aprovado (badge azul) para divergencia de valor (parcela) ou nome parcial
+- [x] **#A02 (v1.7.0):** Legenda de cores acima da tabela de resultados (aprovado, parcial, rejeitado, juros)
+- [x] **#A02 (v1.7.0):** Separadores visuais por pagador e ordenacao automatica (pagador → NF → vencimento)
+- [x] **#A02 (v1.7.0):** Endpoint /version agora le VERSION dinamicamente (sem restart)
+- [x] **#A06 (v1.8.0):** Usuario responsavel na pagina de Auditoria (coluna Responsavel)
+- [x] **#A06 (v1.8.0):** Versao de finalizacao — campo registrado ao finalizar, exibido no Historico e Nova Operacao
 
 ---
 
@@ -137,7 +143,7 @@ Sistema_Envio_Recebiveis/
 ├── start_system.bat                        # Inicia Docker + Backend(5556) + Frontend(5555)
 ├── stop_system.bat                         # Para tudo
 ├── CLAUDE.md                               # Instruções do projeto + regra de versionamento
-├── VERSION                                 # Fonte unica de verdade para versao (1.6.2)
+├── VERSION                                 # Fonte unica de verdade para versao (1.8.0)
 ├── CHANGELOG.md                            # Historico de alteracoes por versao
 │
 ├── docs/
@@ -163,7 +169,8 @@ Sistema_Envio_Recebiveis/
 │   │       ├── 001_initial_schema.py       # 8 tabelas + índices + uuid-ossp
 │   │       ├── 002_add_user_operacao.py    # criado_por_id em operacoes
 │   │       ├── 003_add_valores_operacao.py # valor_bruto, valor_liquido em operacoes
-│   │       └── 004_fidc_email_fields.py    # email_introducao, email_mensagem_fechamento, email_assinatura_nome em fidcs
+│   │       ├── 004_fidc_email_fields.py    # email_introducao, email_mensagem_fechamento, email_assinatura_nome em fidcs
+│   │       └── 005_add_versao_finalizacao.py # versao_finalizacao em operacoes
 │   ├── app/
 │   │   ├── __init__.py
 │   │   ├── config.py                       # Settings (pydantic-settings, .env)
@@ -304,9 +311,10 @@ npm run dev                                  # http://localhost:5555
 ### Projeto COMPLETO (M1-M7) + Aprimoramentos A01-A06 — Em uso producao (rede local)
 
 Todas as fases de desenvolvimento foram concluidas com sucesso.
-O sistema esta funcional e em uso na rede local. Versao atual: **v1.6.2**.
+O sistema esta funcional e em uso na rede local. Versao atual: **v1.8.0**.
 
 **Ultimos commits:**
+- `7550f9d` feat: status parcialmente aprovado, legenda de cores e agrupamento visual — **v1.7.0**
 - `ee4cb58` fix: corrigir extracao de NF no extrator Novax — **v1.6.2**
 - `879c990` security: corrigir vulnerabilidades criticas
 - `302dd93` fix: remover credenciais pre-preenchidas na tela de login
@@ -319,6 +327,7 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.6.2**.
 - `ac19866` feat: adicionar indicador de historico de versoes (#A06) — **v1.1.0**
 
 **Bugs corrigidos recentemente:**
+- **v1.7.0:** Status parcialmente aprovado (badge azul), legenda de cores, separadores por pagador, ordenacao automatica
 - **v1.6.2:** Extrator Novax nao extraia NF — header "N do Documento" nao detectado (34/34 boletos rejeitados → 34/34 aprovados)
 - **v1.6.1:** Erro 500 no upload de boletos para FIDCs novas — GenericExtractor como fallback
 - **Bug #07:** Edicao de emails de XMLs — auto-inclusao de email pendente no input ao salvar
@@ -351,11 +360,13 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.6.2**.
 | Upload | FormData direto | Não usar `apiFetch` wrapper (não suporta multipart) |
 | Valor tolerance | 0 centavos | Zero tolerância — regra de negócio inviolável |
 | Fuzzy match | 85% (SequenceMatcher) | Camada 3 — warning only, nunca bloqueia |
+| Status parcial | parcialmente_aprovado | Parcela detectada (2-12x, 1ct/parcela) ou nome < 85%; incluido em emails e valor bruto |
+| Agrupamento boletos | Separadores + sort | Pagador → NF → vencimento; rejeitados ao final; separadores visuais entre pagadores |
 | Max emails | 2 por cliente | 2º email descartado se > 100 chars |
 | Tabs | Max 10 | Contexto de operação persistente via React Context |
 | Saudacao email | Automatica por horario | Bom dia (0-12h), Boa tarde (13-18h), Boa noite (19-23h) |
 | Versionamento | Semantic Versioning | Arquivo `VERSION` na raiz, tags git, CHANGELOG.md |
-| Version caching | Restart obrigatorio | Backend (main.py) e frontend (next.config.ts) leem VERSION no startup |
+| Version caching | Parcial | Backend le VERSION dinamicamente via endpoint; frontend le no build (next.config.ts) |
 
 ---
 
@@ -381,7 +392,7 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.6.2**.
 
 ## 8. VERSIONAMENTO
 
-### Versao Atual: 1.6.2
+### Versao Atual: 1.8.0
 
 O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 - **MAJOR** (X.0.0): Mudancas incompativeis (schema DB, API breaking changes)
@@ -402,7 +413,7 @@ O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 3. Atualizar `CHANGELOG_ENTRIES` em `frontend/src/components/version-dialog.tsx`
 4. Atualizar `version` em `frontend/package.json`
 5. Atualizar a **Versao Atual** nesta secao e no `CLAUDE.md`
-6. **IMPORTANTE:** Reiniciar backend e frontend apos atualizar VERSION (ambos leem no startup)
+6. **IMPORTANTE:** Reiniciar frontend apos atualizar VERSION (le no build via next.config.ts); backend le dinamicamente
 7. Commit: `release: vX.Y.Z`
 8. Tag: `git tag -a vX.Y.Z -m "vX.Y.Z: descricao" && git push origin vX.Y.Z`
 
@@ -418,3 +429,4 @@ O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 | v1.6.0 | 7b44766 | 2026-02-16 | CRUD FIDCs + textos email personalizados (#A04, #A05) |
 | v1.6.1 | 73eab85 | 2026-02-16 | Extrator generico como fallback para FIDCs novas |
 | v1.6.2 | ee4cb58 | 2026-02-23 | Fix extracao NF extrator Novax |
+| v1.7.0 | 7550f9d | 2026-02-23 | Status parcial, legenda cores, separadores pagador (#A02) |

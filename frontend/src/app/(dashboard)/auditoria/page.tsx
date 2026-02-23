@@ -58,6 +58,7 @@ interface AuditoriaItem {
   status: string;
   motivo_rejeicao: string | null;
   juros_detectado: boolean;
+  usuario_nome: string | null;
   created_at: string;
 }
 
@@ -318,6 +319,7 @@ export default function AuditoriaPage() {
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="pendente">Pendente</SelectItem>
                   <SelectItem value="aprovado">Aprovado</SelectItem>
+                  <SelectItem value="parcialmente_aprovado">Parcial</SelectItem>
                   <SelectItem value="rejeitado">Rejeitado</SelectItem>
                 </SelectContent>
               </Select>
@@ -388,6 +390,7 @@ export default function AuditoriaPage() {
                     <TableHead>Vencimento</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>FIDC</TableHead>
+                    <TableHead>Responsavel</TableHead>
                     <TableHead>Data</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -436,6 +439,9 @@ export default function AuditoriaPage() {
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         {item.fidc_nome}
+                      </TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {item.usuario_nome || "\u2014"}
                       </TableCell>
                       <TableCell className="text-sm whitespace-nowrap">
                         {formatDate(item.created_at)}

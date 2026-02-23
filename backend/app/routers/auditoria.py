@@ -44,6 +44,7 @@ async def buscar_auditoria(
             Operacao.numero.label("op_numero"),
             Operacao.fidc_id.label("op_fidc_id"),
             Fidc.nome.label("fidc_nome"),
+            Operacao.usuario_id.label("op_usuario_id"),
         )
         .join(Operacao, Boleto.operacao_id == Operacao.id)
         .join(Fidc, Operacao.fidc_id == Fidc.id)
@@ -111,12 +112,22 @@ async def buscar_auditoria(
     result = await db.execute(query)
     rows = result.all()
 
+    # Resolver usuario_ids → nomes
+    usuario_ids = list({row[4] for row in rows if row[4]})
+    usuarios_map = {}
+    if usuario_ids:
+        usuarios_result = await db.execute(
+            select(Usuario).where(Usuario.id.in_(usuario_ids))
+        )
+        usuarios_map = {u.id: u.nome for u in usuarios_result.scalars().all()}
+
     items = []
     for row in rows:
         boleto = row[0]
         op_numero = row[1]
         op_fidc_id = row[2]
         fidc_nome = row[3]
+        op_usuario_id = row[4]
 
         items.append(AuditoriaItem(
             boleto_id=boleto.id,
@@ -133,6 +144,7 @@ async def buscar_auditoria(
             status=boleto.status,
             motivo_rejeicao=boleto.motivo_rejeicao,
             juros_detectado=boleto.juros_detectado,
+            usuario_nome=usuarios_map.get(op_usuario_id),
             validacao_camada1=boleto.validacao_camada1,
             validacao_camada2=boleto.validacao_camada2,
             validacao_camada3=boleto.validacao_camada3,

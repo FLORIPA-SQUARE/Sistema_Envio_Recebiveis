@@ -21,6 +21,7 @@ class AuditoriaItem(BaseModel):
     status: str
     motivo_rejeicao: str | None
     juros_detectado: bool
+    usuario_nome: str | None = None
     validacao_camada1: dict | None = None
     validacao_camada2: dict | None = None
     validacao_camada3: dict | None = None

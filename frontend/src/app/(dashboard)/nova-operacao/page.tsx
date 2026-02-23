@@ -139,6 +139,7 @@ interface OperacaoDetalhada {
   taxa_sucesso: number;
   valor_bruto: number | null;
   valor_liquido: number | null;
+  versao_finalizacao: string | null;
   boletos: BoletoCompleto[];
   xmls: XmlResumo[];
   created_at: string;
@@ -2318,9 +2319,14 @@ function OperationEditor({ tabId }: { tabId: string }) {
         <div className="space-y-6">
           {/* Action bar: date + buttons */}
           <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
+            <div className="text-sm text-muted-foreground flex items-center gap-3">
               {operacaoCreatedAt && (
                 <span>Criada em {formatDate(operacaoCreatedAt)}</span>
+              )}
+              {operacao?.versao_finalizacao && (
+                <Badge variant="outline" className="text-[10px] font-normal">
+                  Finalizada na v{operacao.versao_finalizacao}
+                </Badge>
               )}
             </div>
             <div className="flex items-center gap-2">

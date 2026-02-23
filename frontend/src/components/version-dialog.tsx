@@ -20,6 +20,17 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.8.0",
+    date: "2026-02-23",
+    summary: "Usuario responsavel na auditoria e versao de finalizacao (#A06)",
+    items: [
+      "Coluna 'Responsavel' na pagina de Auditoria mostrando quem criou a operacao",
+      "Versao do sistema registrada ao finalizar operacao (campo versao_finalizacao)",
+      "Versao exibida no Historico (subtexto da badge) e na Nova Operacao (badge outline)",
+      "Filtro de status 'Parcial' adicionado na Auditoria",
+    ],
+  },
+  {
     version: "1.7.0",
     date: "2026-02-23",
     summary: "Status parcialmente aprovado, legenda de cores e agrupamento visual (#A02)",

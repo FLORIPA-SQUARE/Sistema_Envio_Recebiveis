@@ -44,6 +44,7 @@ class OperacaoResponse(BaseModel):
     taxa_sucesso: float
     valor_bruto: float | None = None
     valor_liquido: float | None = None
+    versao_finalizacao: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -107,6 +108,7 @@ class OperacaoDetalhada(BaseModel):
     taxa_sucesso: float
     valor_bruto: float | None = None
     valor_liquido: float | None = None
+    versao_finalizacao: str | None = None
     created_at: datetime
     boletos: list[BoletoCompleto]
     xmls: list[XmlResumo]
@@ -159,6 +161,7 @@ class OperacaoFinalizada(BaseModel):
     taxa_sucesso: float
     valor_bruto: float | None = None
     valor_liquido: float | None = None
+    versao_finalizacao: str | None = None
     relatorio_gerado: bool
 
 

@@ -27,6 +27,7 @@ Endpoints:
   GET    /operacoes/{id}/xmls/{xid}/arquivo      — Download/preview arquivo XML
 """
 
+import asyncio
 import io
 import logging
 import shutil
@@ -1646,10 +1647,10 @@ async def enviar_operacao(
         # Enviar ou criar rascunho
         try:
             if body.modo == "preview":
-                mailer.create_draft(group)
+                await asyncio.to_thread(mailer.create_draft, group)
                 envio.status = "rascunho"
             else:
-                mailer.send_email(group)
+                await asyncio.to_thread(mailer.send_email, group)
                 envio.status = "enviado"
                 envio.timestamp_envio = datetime.now(timezone.utc)
                 emails_enviados += 1
@@ -1749,7 +1750,7 @@ async def confirmar_envio(
     )
 
     try:
-        mailer.send_email(group)
+        await asyncio.to_thread(mailer.send_email, group)
         envio.status = "enviado"
         envio.timestamp_envio = datetime.now(timezone.utc)
     except RuntimeError as e:
@@ -1809,7 +1810,7 @@ async def confirmar_todos_envios(
         group = await _reconstruir_email_group(envio, op, db)
 
         try:
-            mailer.send_email(group)
+            await asyncio.to_thread(mailer.send_email, group)
             envio.status = "enviado"
             envio.timestamp_envio = datetime.now(timezone.utc)
             emails_enviados += 1

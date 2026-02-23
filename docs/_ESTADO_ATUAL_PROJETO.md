@@ -143,7 +143,7 @@ Sistema_Envio_Recebiveis/
 ├── start_system.bat                        # Inicia Docker + Backend(5556) + Frontend(5555)
 ├── stop_system.bat                         # Para tudo
 ├── CLAUDE.md                               # Instruções do projeto + regra de versionamento
-├── VERSION                                 # Fonte unica de verdade para versao (1.8.0)
+├── VERSION                                 # Fonte unica de verdade para versao (1.8.2)
 ├── CHANGELOG.md                            # Historico de alteracoes por versao
 │
 ├── docs/
@@ -311,10 +311,11 @@ npm run dev                                  # http://localhost:5555
 ### Projeto COMPLETO (M1-M7) + Aprimoramentos A01-A06 — Em uso producao (rede local)
 
 Todas as fases de desenvolvimento foram concluidas com sucesso.
-O sistema esta funcional e em uso na rede local. Versao atual: **v1.8.1**.
+O sistema esta funcional e em uso na rede local. Versao atual: **v1.8.2**.
 
 **Ultimos commits:**
-- `950dedc` feat: usuario responsavel na auditoria e versao de finalizacao — **v1.8.1**
+- `27099e2` fix: correcoes pos v1.8.0 — operacao undefined, status boletos, NF duplicada — **v1.8.1**
+- `950dedc` feat: usuario responsavel na auditoria e versao de finalizacao — **v1.8.0**
 - `7550f9d` feat: status parcialmente aprovado, legenda de cores e agrupamento visual — **v1.7.0**
 - `ee4cb58` fix: corrigir extracao de NF no extrator Novax — **v1.6.2**
 - `879c990` security: corrigir vulnerabilidades criticas
@@ -328,6 +329,7 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.8.1**.
 - `ac19866` feat: adicionar indicador de historico de versoes (#A06) — **v1.1.0**
 
 **Bugs corrigidos recentemente:**
+- **v1.8.2:** SMTP bloqueava event loop (timeout/500 no confirmar-todos) — migrado para `asyncio.to_thread()`; badge "Em Processamento" hardcoded — agora dinamico com state `operacaoStatus`
 - **v1.8.1:** Runtime error `operacao is not defined`, NFs duplicadas no email (parcelas), coluna Status em Boletos Carregados sempre visivel e sincronizada
 - **v1.7.0:** Status parcialmente aprovado (badge azul), legenda de cores, separadores por pagador, ordenacao automatica
 - **v1.6.2:** Extrator Novax nao extraia NF — header "N do Documento" nao detectado (34/34 boletos rejeitados → 34/34 aprovados)
@@ -397,7 +399,7 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.8.1**.
 
 ## 8. VERSIONAMENTO
 
-### Versao Atual: 1.8.1
+### Versao Atual: 1.8.2
 
 O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 - **MAJOR** (X.0.0): Mudancas incompativeis (schema DB, API breaking changes)

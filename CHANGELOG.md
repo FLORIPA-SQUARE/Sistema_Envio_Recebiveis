@@ -5,6 +5,12 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.8.2] - 2026-02-23
+
+### Corrigido
+- SMTP bloqueava event loop do FastAPI causando timeout/500 no "Enviar Todos os Rascunhos" — migrado para `asyncio.to_thread()`
+- Badge "Em Processamento" hardcoded na nova-operacao — agora dinamico (Em Processamento/Concluida/Cancelada) com state `operacaoStatus`
+
 ## [1.8.1] - 2026-02-23
 
 ### Corrigido

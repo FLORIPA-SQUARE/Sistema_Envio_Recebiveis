@@ -20,6 +20,15 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.8.2",
+    date: "2026-02-23",
+    summary: "SMTP async, badge de status dinamico na nova-operacao",
+    items: [
+      "SMTP enviado em thread separada (asyncio.to_thread) — resolve timeout/500",
+      "Badge de status dinamico: Em Processamento, Concluida, Cancelada",
+    ],
+  },
+  {
     version: "1.8.1",
     date: "2026-02-23",
     summary: "Correcoes: operacao undefined, NF duplicada em emails, status boletos carregados",

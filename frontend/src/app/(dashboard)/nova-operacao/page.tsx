@@ -328,6 +328,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [operacaoCreatedAt, setOperacaoCreatedAt] = useState<string | null>(null);
   const [versaoFinalizacao, setVersaoFinalizacao] = useState<string | null>(null);
+  const [operacaoStatus, setOperacaoStatus] = useState<string>("em_processamento");
   const [confirmDialog, setConfirmDialog] = useState<"finalizar" | "cancelar" | "excluir" | null>(null);
   const [editingXmlId, setEditingXmlId] = useState<string | null>(null);
   const [editEmailsList, setEditEmailsList] = useState<string[]>([]);
@@ -379,6 +380,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
         setSavedNumero(op.numero);
         setOperacaoCreatedAt(op.created_at);
         setVersaoFinalizacao(op.versao_finalizacao || null);
+        setOperacaoStatus(op.status);
 
         const foiProcessada = op.boletos.some((b: BoletoCompleto) =>
           b.status === "aprovado" || b.status === "parcialmente_aprovado" || b.status === "rejeitado"
@@ -1024,6 +1026,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
       });
       setUploadedXmls(op.xmls);
       setVersaoFinalizacao(op.versao_finalizacao || null);
+      setOperacaoStatus("concluida");
     } catch {
       toast.error("Erro ao finalizar");
     } finally {
@@ -1243,10 +1246,18 @@ function OperationEditor({ tabId }: { tabId: string }) {
             {displayTitle}
             <span className="animate-pulse text-primary">|</span>
           </h1>
-          {operacaoId && (
+          {operacaoId && operacaoStatus === "em_processamento" && (
             <Badge className="bg-warning text-warning-foreground hover:bg-warning/90">
               Em Processamento
             </Badge>
+          )}
+          {operacaoId && operacaoStatus === "concluida" && (
+            <Badge className="bg-success text-success-foreground hover:bg-success/90">
+              Concluída
+            </Badge>
+          )}
+          {operacaoId && operacaoStatus === "cancelada" && (
+            <Badge variant="destructive">Cancelada</Badge>
           )}
         </div>
         <p className="text-muted-foreground">

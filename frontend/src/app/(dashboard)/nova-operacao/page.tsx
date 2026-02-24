@@ -123,6 +123,7 @@ interface BoletoCompleto {
 interface ResultadoProcessamento {
   total: number;
   aprovados: number;
+  parcialmente_aprovados: number;
   rejeitados: number;
   taxa_sucesso: number;
   boletos: BoletoCompleto[];
@@ -135,6 +136,7 @@ interface OperacaoDetalhada {
   status: string;
   total_boletos: number;
   total_aprovados: number;
+  total_parcialmente_aprovados: number;
   total_rejeitados: number;
   taxa_sucesso: number;
   valor_bruto: number | null;
@@ -390,6 +392,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
           setResultado({
             total: op.total_boletos,
             aprovados: op.total_aprovados,
+            parcialmente_aprovados: op.total_parcialmente_aprovados,
             rejeitados: op.total_rejeitados,
             taxa_sucesso: op.taxa_sucesso,
             boletos: op.boletos,
@@ -713,7 +716,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
       setResultado(result);
       setUploadedBoletos(result.boletos);
       toast.success(
-        `Processamento concluido: ${result.aprovados} aprovados, ${result.rejeitados} rejeitados`
+        `Processamento concluido: ${result.aprovados} aprovados, ${result.parcialmente_aprovados} parciais, ${result.rejeitados} rejeitados`
       );
       // Atualizar status da operacao e carregar preview de envio
       await refreshOperacaoStatus();
@@ -1017,7 +1020,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
       );
       setResultado(result);
       setUploadedBoletos(result.boletos);
-      toast.success(`Reprocessamento: ${result.aprovados} aprovados, ${result.rejeitados} rejeitados`);
+      toast.success(`Reprocessamento: ${result.aprovados} aprovados, ${result.parcialmente_aprovados} parciais, ${result.rejeitados} rejeitados`);
       await refreshOperacaoStatus();
       await fetchEnvioPreview();
     } catch {
@@ -1038,6 +1041,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
       setResultado({
         total: op.total_boletos,
         aprovados: op.total_aprovados,
+        parcialmente_aprovados: op.total_parcialmente_aprovados,
         rejeitados: op.total_rejeitados,
         taxa_sucesso: op.taxa_sucesso,
         boletos: op.boletos,
@@ -2096,7 +2100,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                     </CardContent>
                   </Card>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                   <Card>
                     <CardContent className="pt-6">
                       <p className="text-sm text-muted-foreground">Total Processados</p>
@@ -2107,6 +2111,12 @@ function OperationEditor({ tabId }: { tabId: string }) {
                     <CardContent className="pt-6">
                       <p className="text-sm text-muted-foreground">Aprovados</p>
                       <p className="text-2xl font-bold text-success font-[family-name:var(--font-barlow-condensed)]">{resultado.aprovados}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <p className="text-sm text-muted-foreground">Parciais</p>
+                      <p className="text-2xl font-bold text-blue-600 font-[family-name:var(--font-barlow-condensed)]">{resultado.parcialmente_aprovados}</p>
                     </CardContent>
                   </Card>
                   <Card>
@@ -2138,7 +2148,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                   Emails para Envio ({envioPreview.total_grupos})
                 </CardTitle>
                 <CardDescription>
-                  {envioPreview.total_aprovados} boleto(s) aprovado(s) agrupados em {envioPreview.total_grupos} email(s). Clique para ver os documentos anexados.
+                  {envioPreview.total_aprovados} boleto(s) para envio agrupados em {envioPreview.total_grupos} email(s). Clique para ver os documentos anexados.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -2320,7 +2330,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
           )}
 
           {/* Controles de envio */}
-          {resultado && resultado.aprovados > 0 && (
+          {resultado && (resultado.aprovados + resultado.parcialmente_aprovados) > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Enviar Boletos por Email</CardTitle>
@@ -2345,7 +2355,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                     {envioLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : envioMode === "preview" ? <Eye className="h-4 w-4" /> : <Send className="h-4 w-4" />}
                     {envioLoading ? "Enviando..." : envioMode === "preview" ? "Criar Rascunhos" : "Enviar Emails"}
                   </Button>
-                  <span className="text-sm text-muted-foreground">{resultado.aprovados} boleto(s) aprovado(s) para envio</span>
+                  <span className="text-sm text-muted-foreground">{resultado.aprovados + resultado.parcialmente_aprovados} boleto(s) para envio</span>
                 </div>
               </CardContent>
             </Card>
@@ -2437,7 +2447,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
           </div>
 
           {/* KPI Cards */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Total Boletos</CardTitle>
@@ -2457,6 +2467,17 @@ function OperationEditor({ tabId }: { tabId: string }) {
               <CardContent>
                 <div className="text-2xl font-bold font-[family-name:var(--font-barlow-condensed)] text-success">
                   {resultado.aprovados}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Parciais</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-blue-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold font-[family-name:var(--font-barlow-condensed)] text-blue-600">
+                  {resultado.parcialmente_aprovados}
                 </div>
               </CardContent>
             </Card>

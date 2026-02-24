@@ -285,15 +285,17 @@ async def dashboard_stats(
         select(
             func.coalesce(func.sum(Operacao.total_boletos), 0),
             func.coalesce(func.sum(Operacao.total_aprovados), 0),
+            func.coalesce(func.sum(Operacao.total_parcialmente_aprovados), 0),
             func.coalesce(func.sum(Operacao.total_rejeitados), 0),
         )
     )
     row = sums_result.one()
     total_boletos = int(row[0])
     total_aprovados = int(row[1])
-    total_rejeitados = int(row[2])
+    total_parciais = int(row[2])
+    total_rejeitados = int(row[3])
 
-    taxa = (total_aprovados / total_boletos * 100) if total_boletos > 0 else 0.0
+    taxa = ((total_aprovados + total_parciais) / total_boletos * 100) if total_boletos > 0 else 0.0
 
     # 5 operacoes mais recentes
     recentes_result = await db.execute(
@@ -326,6 +328,7 @@ async def dashboard_stats(
         total_operacoes=total_ops,
         total_boletos=total_boletos,
         total_aprovados=total_aprovados,
+        total_parcialmente_aprovados=total_parciais,
         total_rejeitados=total_rejeitados,
         taxa_sucesso_global=round(taxa, 2),
         operacoes_recentes=recentes_resp,
@@ -468,6 +471,7 @@ async def update_operacao(
         modo_envio=op.modo_envio,
         total_boletos=op.total_boletos,
         total_aprovados=op.total_aprovados,
+        total_parcialmente_aprovados=op.total_parcialmente_aprovados,
         total_rejeitados=op.total_rejeitados,
         taxa_sucesso=op.taxa_sucesso,
         valor_bruto=op.valor_bruto,
@@ -830,6 +834,7 @@ async def get_operacao_detail(
         modo_envio=op.modo_envio,
         total_boletos=op.total_boletos,
         total_aprovados=op.total_aprovados,
+        total_parcialmente_aprovados=op.total_parcialmente_aprovados,
         total_rejeitados=op.total_rejeitados,
         taxa_sucesso=op.taxa_sucesso,
         valor_bruto=op.valor_bruto,
@@ -1120,6 +1125,7 @@ async def processar_operacao(
     boletos = boletos_result.scalars().all()
 
     aprovados = 0
+    parcialmente_aprovados = 0
     rejeitados = 0
     boletos_processados: list[BoletoCompleto] = []
 
@@ -1190,7 +1196,7 @@ async def processar_operacao(
         elif resultado.parcialmente_aprovado:
             boleto.status = "parcialmente_aprovado"
             boleto.motivo_rejeicao = resultado.motivo_parcial
-            aprovados += 1
+            parcialmente_aprovados += 1
         else:
             boleto.status = "rejeitado"
             boleto.motivo_rejeicao = resultado.motivo_rejeicao
@@ -1208,11 +1214,12 @@ async def processar_operacao(
         boletos_processados.append(BoletoCompleto.model_validate(boleto))
 
     # Atualizar totais da operacao
-    total = aprovados + rejeitados
+    total = aprovados + parcialmente_aprovados + rejeitados
     op.total_boletos = total
     op.total_aprovados = aprovados
+    op.total_parcialmente_aprovados = parcialmente_aprovados
     op.total_rejeitados = rejeitados
-    op.taxa_sucesso = (aprovados / total * 100) if total > 0 else 0.0
+    op.taxa_sucesso = ((aprovados + parcialmente_aprovados) / total * 100) if total > 0 else 0.0
 
     # Computar valor bruto (soma dos boletos aprovados + parcialmente aprovados)
     valor_bruto_total = sum(
@@ -1222,7 +1229,7 @@ async def processar_operacao(
     op.valor_bruto = valor_bruto_total if valor_bruto_total > 0 else None
 
     # Auto-transicao de status baseada nos resultados
-    if aprovados > 0:
+    if (aprovados + parcialmente_aprovados) > 0:
         op.status = "aguardando_envio"
     else:
         op.status = "em_processamento"
@@ -1230,13 +1237,14 @@ async def processar_operacao(
     await registrar_audit(
         db, acao="processar_operacao", operacao_id=op.id,
         usuario_id=_current_user.id, entidade="operacao",
-        detalhes={"total": total, "aprovados": aprovados, "rejeitados": rejeitados},
+        detalhes={"total": total, "aprovados": aprovados, "parcialmente_aprovados": parcialmente_aprovados, "rejeitados": rejeitados},
     )
     await db.commit()
 
     return ResultadoProcessamento(
         total=total,
         aprovados=aprovados,
+        parcialmente_aprovados=parcialmente_aprovados,
         rejeitados=rejeitados,
         taxa_sucesso=op.taxa_sucesso,
         valor_bruto=op.valor_bruto,
@@ -1303,6 +1311,7 @@ async def reprocessar_operacao(
         )
 
     novos_aprovados = 0
+    novos_parciais = 0
     ainda_rejeitados = 0
     boletos_processados: list[BoletoCompleto] = []
 
@@ -1359,7 +1368,7 @@ async def reprocessar_operacao(
         elif resultado.parcialmente_aprovado:
             boleto.status = "parcialmente_aprovado"
             boleto.motivo_rejeicao = resultado.motivo_parcial
-            novos_aprovados += 1
+            novos_parciais += 1
             if boleto.arquivo_path:
                 _renomear_arquivo(Path(boleto.arquivo_path), nome_renomeado)
                 boleto.arquivo_path = str(Path(boleto.arquivo_path).parent / nome_renomeado)
@@ -1378,14 +1387,16 @@ async def reprocessar_operacao(
         select(Boleto).where(Boleto.operacao_id == op.id)
     )
     all_boletos = all_boletos_result.scalars().all()
-    total_aprovados = sum(1 for b in all_boletos if b.status in ("aprovado", "parcialmente_aprovado"))
+    total_aprovados = sum(1 for b in all_boletos if b.status == "aprovado")
+    total_parciais = sum(1 for b in all_boletos if b.status == "parcialmente_aprovado")
     total_rejeitados = sum(1 for b in all_boletos if b.status == "rejeitado")
     total = len(all_boletos)
 
     op.total_boletos = total
     op.total_aprovados = total_aprovados
+    op.total_parcialmente_aprovados = total_parciais
     op.total_rejeitados = total_rejeitados
-    op.taxa_sucesso = (total_aprovados / total * 100) if total > 0 else 0.0
+    op.taxa_sucesso = ((total_aprovados + total_parciais) / total * 100) if total > 0 else 0.0
 
     # Recalcular valor bruto (soma dos boletos aprovados + parcialmente aprovados)
     valor_bruto_total = sum(
@@ -1395,7 +1406,7 @@ async def reprocessar_operacao(
     op.valor_bruto = valor_bruto_total if valor_bruto_total > 0 else None
 
     # Recalcular status da operacao
-    if total_aprovados > 0:
+    if (total_aprovados + total_parciais) > 0:
         op.status = "aguardando_envio"
     else:
         op.status = "em_processamento"
@@ -1406,6 +1417,7 @@ async def reprocessar_operacao(
         detalhes={
             "reprocessados": len(boletos_rejeitados),
             "novos_aprovados": novos_aprovados,
+            "novos_parciais": novos_parciais,
             "ainda_rejeitados": ainda_rejeitados,
         },
     )
@@ -1414,6 +1426,7 @@ async def reprocessar_operacao(
     return ResultadoProcessamento(
         total=len(boletos_rejeitados),
         aprovados=novos_aprovados,
+        parcialmente_aprovados=novos_parciais,
         rejeitados=ainda_rejeitados,
         taxa_sucesso=op.taxa_sucesso,
         valor_bruto=op.valor_bruto,
@@ -1482,6 +1495,7 @@ async def finalizar_operacao(
         detalhes={
             "total_boletos": op.total_boletos,
             "aprovados": op.total_aprovados,
+            "parcialmente_aprovados": op.total_parcialmente_aprovados,
             "rejeitados": op.total_rejeitados,
             "taxa_sucesso": op.taxa_sucesso,
             "relatorio_gerado": relatorio_gerado,
@@ -1494,6 +1508,7 @@ async def finalizar_operacao(
         status=op.status,
         total_boletos=op.total_boletos,
         total_aprovados=op.total_aprovados,
+        total_parcialmente_aprovados=op.total_parcialmente_aprovados,
         total_rejeitados=op.total_rejeitados,
         taxa_sucesso=op.taxa_sucesso,
         valor_bruto=op.valor_bruto,

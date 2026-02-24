@@ -40,6 +40,7 @@ class OperacaoResponse(BaseModel):
     modo_envio: str
     total_boletos: int
     total_aprovados: int
+    total_parcialmente_aprovados: int = 0
     total_rejeitados: int
     taxa_sucesso: float
     valor_bruto: float | None = None
@@ -104,6 +105,7 @@ class OperacaoDetalhada(BaseModel):
     modo_envio: str
     total_boletos: int
     total_aprovados: int
+    total_parcialmente_aprovados: int = 0
     total_rejeitados: int
     taxa_sucesso: float
     valor_bruto: float | None = None
@@ -130,6 +132,7 @@ class UploadXmlsResponse(BaseModel):
 class ResultadoProcessamento(BaseModel):
     total: int
     aprovados: int
+    parcialmente_aprovados: int = 0
     rejeitados: int
     taxa_sucesso: float
     valor_bruto: float | None = None
@@ -147,6 +150,7 @@ class DashboardStats(BaseModel):
     total_operacoes: int
     total_boletos: int
     total_aprovados: int
+    total_parcialmente_aprovados: int = 0
     total_rejeitados: int
     taxa_sucesso_global: float
     operacoes_recentes: list[OperacaoResponse]
@@ -157,6 +161,7 @@ class OperacaoFinalizada(BaseModel):
     status: str
     total_boletos: int
     total_aprovados: int
+    total_parcialmente_aprovados: int = 0
     total_rejeitados: int
     taxa_sucesso: float
     valor_bruto: float | None = None

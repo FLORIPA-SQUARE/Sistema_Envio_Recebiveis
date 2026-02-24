@@ -20,6 +20,17 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.9.2",
+    date: "2026-02-24",
+    summary: "Contagem separada de Parcialmente Aprovados em todas as telas (#A07)",
+    items: [
+      "Dashboard, historico e nova-operacao agora exibem 3 categorias: Aprovados, Parciais, Rejeitados",
+      "Campo total_parcialmente_aprovados no banco com migration e backfill automatico",
+      "total_aprovados agora conta somente boletos 100% aprovados (antes incluia parciais)",
+      "Toasts e controles de envio atualizados com as 3 categorias",
+    ],
+  },
+  {
     version: "1.9.1",
     date: "2026-02-23",
     summary: "Preview de email na configuracao de FIDCs (#A08)",

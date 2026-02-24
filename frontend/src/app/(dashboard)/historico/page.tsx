@@ -47,6 +47,7 @@ interface Operacao {
   modo_envio: string;
   total_boletos: number;
   total_aprovados: number;
+  total_parcialmente_aprovados: number;
   total_rejeitados: number;
   taxa_sucesso: number;
   valor_bruto: number | null;
@@ -347,6 +348,7 @@ export default function HistoricoPage() {
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Aprovados</TableHead>
+                    <TableHead className="text-right">Parciais</TableHead>
                     <TableHead className="text-right">Rejeitados</TableHead>
                     <TableHead className="text-right">Taxa (%)</TableHead>
                     <TableHead className="text-right">Vl. Bruto</TableHead>
@@ -386,6 +388,9 @@ export default function HistoricoPage() {
                       </TableCell>
                       <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)] text-success">
                         {op.total_aprovados}
+                      </TableCell>
+                      <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)] text-blue-600">
+                        {op.total_parcialmente_aprovados}
                       </TableCell>
                       <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)] text-destructive">
                         {op.total_rejeitados}

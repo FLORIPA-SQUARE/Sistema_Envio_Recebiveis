@@ -5,6 +5,22 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.9.2] - 2026-02-24
+
+### Adicionado
+- Contagem separada de "Parcialmente Aprovados" em todas as telas (dashboard, historico, nova-operacao) (#A07)
+- Campo `total_parcialmente_aprovados` na tabela operacoes com migration e backfill de dados existentes
+- Card KPI "Parciais" (azul) no dashboard entre "Aprovados" e "Rejeitados"
+- Coluna "Parciais" na tabela do historico de operacoes
+- Card "Parciais" nos resultados de processamento da nova-operacao
+- Campo `parcialmente_aprovados` no resumo JSON do relatorio de auditoria
+
+### Alterado
+- `total_aprovados` agora conta somente boletos com status "aprovado" (antes incluia parciais)
+- `taxa_sucesso` recalculada como (aprovados + parciais) / total — semantica de "enviados" preservada
+- Toasts de processamento mostram 3 categorias: aprovados, parciais, rejeitados
+- Controles de envio consideram (aprovados + parciais) para habilitar botao
+
 ## [1.9.1] - 2026-02-23
 
 ### Adicionado

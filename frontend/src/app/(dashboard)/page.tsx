@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import {
   FileText,
   CheckCircle2,
+  AlertTriangle,
   XCircle,
   TrendingUp,
   ArrowRight,
@@ -41,6 +42,7 @@ interface Operacao {
   status: string;
   total_boletos: number;
   total_aprovados: number;
+  total_parcialmente_aprovados: number;
   total_rejeitados: number;
   taxa_sucesso: number;
   valor_bruto: number | null;
@@ -52,6 +54,7 @@ interface DashboardStats {
   total_operacoes: number;
   total_boletos: number;
   total_aprovados: number;
+  total_parcialmente_aprovados: number;
   total_rejeitados: number;
   taxa_sucesso_global: number;
   operacoes_recentes: Operacao[];
@@ -149,6 +152,12 @@ export default function DashboardPage() {
       color: "text-success",
     },
     {
+      label: "Parciais",
+      value: stats ? String(stats.total_parcialmente_aprovados) : "—",
+      icon: AlertTriangle,
+      color: "text-blue-600",
+    },
+    {
       label: "Rejeitados",
       value: stats ? String(stats.total_rejeitados) : "—",
       icon: XCircle,
@@ -172,7 +181,7 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {kpis.map((stat) => (
           <Card key={stat.label}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">

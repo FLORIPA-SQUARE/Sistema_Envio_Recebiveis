@@ -1,8 +1,8 @@
 # ESTADO ATUAL DO PROJETO — Sistema Automação Envio de Boletos
 
-> **Ultima atualizacao:** 2026-02-23
-> **Sessao:** Implementacao M1-M7 + Aprimoramentos A01-A06
-> **Versao atual:** v1.8.1
+> **Ultima atualizacao:** 2026-02-24
+> **Sessao:** Implementacao M1-M7 + Aprimoramentos A01-A08
+> **Versao atual:** v1.9.2
 > **Fonte de verdade:** `docs/prd/PRD-001-Especificacao.md`
 
 ---
@@ -92,11 +92,11 @@
 - [x] Endpoint GET /operacoes/{id}/preview-envio (preview de agrupamento)
 
 ### FASE 6: Dashboard + Auditoria — ✅ CONCLUÍDA
-- [x] Dashboard com KPIs reais (Total, Aprovados, Rejeitados, Taxa) — feito em M4
-- [x] Historico de operacoes com filtros (FIDC, data, status) — feito em M4
-- [x] Geracao de relatorio TXT (formato legado identico) — feito em M4
-- [x] Geracao de relatorio JSON estruturado — feito em M4
-- [x] Download de relatorios — feito em M4
+- [x] Dashboard com KPIs reais (Total, Aprovados, Parciais, Rejeitados, Taxa) — 5 cards
+- [x] Historico de operacoes com filtros (FIDC, data, status) — inclui coluna Parciais
+- [x] Geracao de relatorio TXT (formato legado identico)
+- [x] Geracao de relatorio JSON estruturado (com campo parcialmente_aprovados)
+- [x] Download de relatorios
 - [x] Busca global por cliente/NF/CNPJ (GET /auditoria/buscar + pagina frontend)
 - [x] Filtros de data, FIDC e status na busca de auditoria
 
@@ -127,8 +127,13 @@
 - [x] **#A02 (v1.7.0):** Legenda de cores acima da tabela de resultados (aprovado, parcial, rejeitado, juros)
 - [x] **#A02 (v1.7.0):** Separadores visuais por pagador e ordenacao automatica (pagador → NF → vencimento)
 - [x] **#A02 (v1.7.0):** Endpoint /version agora le VERSION dinamicamente (sem restart)
-- [x] **#A06 (v1.8.1):** Usuario responsavel na pagina de Auditoria (coluna Responsavel)
-- [x] **#A06 (v1.8.1):** Versao de finalizacao — campo registrado ao finalizar, exibido no Historico e Nova Operacao
+- [x] **#A06 (v1.8.0):** Usuario responsavel na pagina de Auditoria (coluna Responsavel)
+- [x] **#A06 (v1.8.0):** Versao de finalizacao — campo registrado ao finalizar, exibido no Historico e Nova Operacao
+- [x] **Fix (v1.8.1):** Correcoes pos v1.8.0 — operacao undefined, NF duplicada em emails, status boletos
+- [x] **Fix (v1.8.2):** SMTP async (asyncio.to_thread) — resolve timeout/500; badge de status dinamico
+- [x] **#A05 (v1.9.0):** Maquina de estados completa: em_processamento → aguardando_envio → enviada → concluida
+- [x] **#A08 (v1.9.1):** Preview de email na configuracao de FIDCs — POST /fidcs/preview-email, botao Eye, iframe dialog
+- [x] **#A07 (v1.9.2):** Nomenclatura de boletos — contagem separada de Parcialmente Aprovados em todas as telas
 
 ---
 
@@ -143,7 +148,7 @@ Sistema_Envio_Recebiveis/
 ├── start_system.bat                        # Inicia Docker + Backend(5556) + Frontend(5555)
 ├── stop_system.bat                         # Para tudo
 ├── CLAUDE.md                               # Instruções do projeto + regra de versionamento
-├── VERSION                                 # Fonte unica de verdade para versao (1.8.2)
+├── VERSION                                 # Fonte unica de verdade para versao (1.9.2)
 ├── CHANGELOG.md                            # Historico de alteracoes por versao
 │
 ├── docs/
@@ -167,10 +172,11 @@ Sistema_Envio_Recebiveis/
 │   │   ├── env.py                          # Async migration config
 │   │   └── versions/
 │   │       ├── 001_initial_schema.py       # 8 tabelas + índices + uuid-ossp
-│   │       ├── 002_add_user_operacao.py    # criado_por_id em operacoes
+│   │       ├── 002_email_layouts.py        # email_layouts table
 │   │       ├── 003_add_valores_operacao.py # valor_bruto, valor_liquido em operacoes
 │   │       ├── 004_fidc_email_fields.py    # email_introducao, email_mensagem_fechamento, email_assinatura_nome em fidcs
-│   │       └── 005_add_versao_finalizacao.py # versao_finalizacao em operacoes
+│   │       ├── 005_add_versao_finalizacao.py # versao_finalizacao em operacoes
+│   │       └── 006_add_total_parcial.py    # total_parcialmente_aprovados em operacoes + backfill
 │   ├── app/
 │   │   ├── __init__.py
 │   │   ├── config.py                       # Settings (pydantic-settings, .env)
@@ -181,22 +187,22 @@ Sistema_Envio_Recebiveis/
 │   │   │   ├── __init__.py                 # Re-exporta todos os modelos
 │   │   │   ├── usuario.py                  # UUID pk, nome, email, senha_hash, ativo
 │   │   │   ├── fidc.py                     # nome, nome_completo, cnpj, cc_emails[], palavras_chave[], cor, email_*
-│   │   │   ├── operacao.py                 # numero, fidc_id, status, modo_envio, totais, valor_bruto, valor_liquido, criado_por_id
+│   │   │   ├── operacao.py                 # numero, fidc_id, status, modo_envio, totais (apr/parcial/rej), valor_bruto, valor_liquido
 │   │   │   ├── xml_nfe.py                  # numero_nota, cnpj, valor_total, emails[], emails_invalidos[], duplicatas JSONB
-│   │   │   ├── boleto.py                   # pagador, valor, validacao_camada1-5 JSONB, status
+│   │   │   ├── boleto.py                   # pagador, valor, validacao_camada1-5 JSONB, status (pendente|aprovado|parcialmente_aprovado|rejeitado)
 │   │   │   ├── envio.py                    # email_para[], email_cc[], boletos_ids[], status
 │   │   │   ├── email_layout.py             # nome, assunto_template, corpo_html, ativo, assinatura
 │   │   │   └── audit_log.py               # BIGSERIAL pk, acao, detalhes JSONB
 │   │   ├── schemas/
 │   │   │   ├── __init__.py
 │   │   │   ├── auth.py                     # LoginRequest/Response, UsuarioResponse
-│   │   │   ├── fidc.py                     # FidcCreate, FidcUpdate, FidcResponse (com email_*)
-│   │   │   ├── operacao.py                 # OperacaoCreate/Response/Detalhada, ValoresAgregadoItem/Response
+│   │   │   ├── fidc.py                     # FidcCreate, FidcUpdate, FidcResponse, FidcEmailPreviewRequest/Response
+│   │   │   ├── operacao.py                 # OperacaoCreate/Response/Detalhada, DashboardStats, ResultadoProcessamento (c/ parcialmente_aprovados)
 │   │   │   └── auditoria.py               # AuditoriaItem + AuditoriaBuscarResponse
-│   │   ├── routers/                        # 6 routers, 41+ endpoints
+│   │   ├── routers/                        # 6 routers, 42+ endpoints
 │   │   │   ├── __init__.py
 │   │   │   ├── auth.py                     # POST /auth/login, GET /auth/me (2)
-│   │   │   ├── fidcs.py                    # GET /fidcs(?ativo), POST /fidcs, PUT /fidcs/{id} (3)
+│   │   │   ├── fidcs.py                    # GET /fidcs(?ativo), POST /fidcs, POST /fidcs/preview-email, PUT /fidcs/{id} (4)
 │   │   │   ├── operacoes.py               # 28 endpoints: CRUD, upload, processar, enviar, dashboard/valores, atividade
 │   │   │   ├── auditoria.py              # GET /auditoria/buscar (1)
 │   │   │   ├── email_layout.py           # CRUD layouts, ativar, smtp-status, smtp-test (7)
@@ -217,7 +223,7 @@ Sistema_Envio_Recebiveis/
 │   │       ├── __init__.py
 │   │       ├── pdf_splitter.py            # split_pdf() via PyPDF2
 │   │       ├── audit.py                   # registrar_audit() helper
-│   │       ├── report_generator.py        # Geracao TXT/JSON de relatorios
+│   │       ├── report_generator.py        # Geracao TXT/JSON de relatorios (c/ parcialmente_aprovados no resumo)
 │   │       ├── email_template.py          # gerar_email_html(), gerar_assunto()
 │   │       ├── email_grouper.py           # agrupar_boletos_para_envio(), EmailGroup
 │   │       └── smtp_mailer.py             # SmtpMailer — SMTP via smtplib (envio + rascunho)
@@ -241,16 +247,16 @@ Sistema_Envio_Recebiveis/
     │   │   │   └── page.tsx                # Tela login (JWT → localStorage)
     │   │   └── (dashboard)/
     │   │       ├── layout.tsx              # Sidebar autenticada (6 links)
-    │   │       ├── page.tsx                # Dashboard (KPIs + explorador financeiro + operacoes recentes)
+    │   │       ├── page.tsx                # Dashboard (5 KPIs: Total, Aprovados, Parciais, Rejeitados, Taxa + explorador + recentes)
     │   │       ├── nova-operacao/
     │   │       │   └── page.tsx            # Megatela: Config → Upload → Processamento → Resultado + Atividade
     │   │       ├── historico/
-    │   │       │   └── page.tsx            # Listagem paginada com filtros FIDC/status, valores bruto/liquido
+    │   │       │   └── page.tsx            # Listagem paginada com filtros FIDC/status, colunas Aprovados/Parciais/Rejeitados
     │   │       ├── auditoria/
     │   │       │   └── page.tsx            # Busca global: search + date range + FIDC/status
     │   │       └── configuracao/
     │   │           ├── fidcs/
-    │   │           │   └── page.tsx        # CRUD FIDCs: criar, editar, ativar/desativar, tabs (Dados + Email)
+    │   │           │   └── page.tsx        # CRUD FIDCs: criar, editar, ativar/desativar, tabs (Dados + Email), preview email
     │   │           └── email/
     │   │               └── page.tsx        # Layouts de email: CRUD até 3, SMTP status/test
     │   ├── contexts/
@@ -308,36 +314,22 @@ npm run dev                                  # http://localhost:5555
 
 ## 5. STATUS GERAL
 
-### Projeto COMPLETO (M1-M7) + Aprimoramentos A01-A06 — Em uso producao (rede local)
+### Projeto COMPLETO (M1-M7) + Aprimoramentos A01-A08 — Em uso producao (rede local)
 
 Todas as fases de desenvolvimento foram concluidas com sucesso.
-O sistema esta funcional e em uso na rede local. Versao atual: **v1.8.2**.
+O sistema esta funcional e em uso na rede local. Versao atual: **v1.9.2**.
 
 **Ultimos commits:**
+- `af733fc` feat: preview de email na configuracao de FIDCs — **v1.9.1**
+- `69581af` feat: maquina de estados com aguardando_envio e enviada — **v1.9.0**
+- `da9d95b` fix: SMTP async e badge de status dinamico na nova-operacao — **v1.8.2**
 - `27099e2` fix: correcoes pos v1.8.0 — operacao undefined, status boletos, NF duplicada — **v1.8.1**
 - `950dedc` feat: usuario responsavel na auditoria e versao de finalizacao — **v1.8.0**
 - `7550f9d` feat: status parcialmente aprovado, legenda de cores e agrupamento visual — **v1.7.0**
 - `ee4cb58` fix: corrigir extracao de NF no extrator Novax — **v1.6.2**
-- `879c990` security: corrigir vulnerabilidades criticas
-- `302dd93` fix: remover credenciais pre-preenchidas na tela de login
-- `eebf064` chore: adicionar usuario Camila ao seed
-- `73eab85` fix: extrator generico como fallback para FIDCs novas — **v1.6.1**
-- `7b44766` feat: CRUD de FIDCs e textos de email personalizados (#A04, #A05) — **v1.6.0**
-- `84a8841` feat: explorador financeiro com grafico de valores por periodo (#A02) — **v1.5.0**
-- `c2aa12f` feat: valores por operacao e auditoria de usuarios (#A06, #A05) — **v1.3.0 / v1.4.0**
-- `ec6ddcd` feat: saudacao automatica por horario no email (#A01) — **v1.2.0**
-- `ac19866` feat: adicionar indicador de historico de versoes (#A06) — **v1.1.0**
-
-**Bugs corrigidos recentemente:**
-- **v1.8.2:** SMTP bloqueava event loop (timeout/500 no confirmar-todos) — migrado para `asyncio.to_thread()`; badge "Em Processamento" hardcoded — agora dinamico com state `operacaoStatus`
-- **v1.8.1:** Runtime error `operacao is not defined`, NFs duplicadas no email (parcelas), coluna Status em Boletos Carregados sempre visivel e sincronizada
-- **v1.7.0:** Status parcialmente aprovado (badge azul), legenda de cores, separadores por pagador, ordenacao automatica
-- **v1.6.2:** Extrator Novax nao extraia NF — header "N do Documento" nao detectado (34/34 boletos rejeitados → 34/34 aprovados)
-- **v1.6.1:** Erro 500 no upload de boletos para FIDCs novas — GenericExtractor como fallback
-- **Bug #07:** Edicao de emails de XMLs — auto-inclusao de email pendente no input ao salvar
 
 **Melhorias opcionais futuras:**
-1. **Refatoracao** — `nova-operacao/page.tsx` (~2900 linhas) em sub-componentes
+1. **Refatoracao** — `nova-operacao/page.tsx` (~3100 linhas) em sub-componentes
 2. **Testes automatizados** — Cobertura E2E de fluxo completo
 3. **Documentacao de usuario** — Guia de uso com screenshots
 4. **Seguranca para internet** — Restringir CORS, JWT_SECRET_KEY forte, SSL/TLS, rate limiting
@@ -357,6 +349,7 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.8.2**.
 | DB Driver | asyncpg | SQLAlchemy 2.x async |
 | Email | SMTP (smtplib) | Substituiu Outlook COM (pywin32 removido) |
 | Email per-FIDC | 3 campos nullable | Override do layout global (NULL = usar global) |
+| Email preview | POST /fidcs/preview-email | Renderiza template real com dados de exemplo; iframe no frontend |
 | Graficos | recharts 3.7.0 | Explorador financeiro com BarChart |
 | Extrator generico | GenericExtractor | Fallback para FIDCs sem extrator dedicado |
 | FIDC CRUD | Soft delete (ativo) | FK operacoes.fidc_id impede DELETE; nome imutavel apos criacao |
@@ -365,6 +358,8 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.8.2**.
 | Valor tolerance | 0 centavos | Zero tolerância — regra de negócio inviolável |
 | Fuzzy match | 85% (SequenceMatcher) | Camada 3 — warning only, nunca bloqueia |
 | Status parcial | parcialmente_aprovado | Parcela detectada (2-12x, 1ct/parcela) ou nome < 85%; incluido em emails e valor bruto |
+| Contagem parciais | total_parcialmente_aprovados | Campo separado no DB (v1.9.2). total_aprovados = somente 100% aprovados. taxa_sucesso = (apr+parcial)/total |
+| Status operacao | Maquina de estados | em_processamento → aguardando_envio → enviada → concluida (v1.9.0) |
 | Agrupamento boletos | Separadores + sort | Pagador → NF → vencimento; rejeitados ao final; separadores visuais entre pagadores |
 | Max emails | 2 por cliente | 2º email descartado se > 100 chars |
 | Tabs | Max 10 | Contexto de operação persistente via React Context |
@@ -399,7 +394,7 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.8.2**.
 
 ## 8. VERSIONAMENTO
 
-### Versao Atual: 1.8.2
+### Versao Atual: 1.9.2
 
 O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 - **MAJOR** (X.0.0): Mudancas incompativeis (schema DB, API breaking changes)
@@ -415,7 +410,7 @@ O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 | `CLAUDE.md` (raiz) | Regra obrigatoria de atualizacao a cada commit |
 
 ### Como Atualizar a Versao
-1. Editar `VERSION` com o novo numero (ex: `1.6.1`)
+1. Editar `VERSION` com o novo numero (ex: `1.9.2`)
 2. Adicionar entrada no `CHANGELOG.md`
 3. Atualizar `CHANGELOG_ENTRIES` em `frontend/src/components/version-dialog.tsx`
 4. Atualizar `version` em `frontend/package.json`
@@ -437,4 +432,51 @@ O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 | v1.6.1 | 73eab85 | 2026-02-16 | Extrator generico como fallback para FIDCs novas |
 | v1.6.2 | ee4cb58 | 2026-02-23 | Fix extracao NF extrator Novax |
 | v1.7.0 | 7550f9d | 2026-02-23 | Status parcial, legenda cores, separadores pagador (#A02) |
-| v1.8.1 | 950dedc | 2026-02-23 | Usuario responsavel na auditoria + versao de finalizacao (#A06) |
+| v1.8.0 | 950dedc | 2026-02-23 | Usuario responsavel na auditoria + versao de finalizacao (#A06) |
+| v1.8.1 | 27099e2 | 2026-02-23 | Correcoes pos v1.8.0 |
+| v1.8.2 | da9d95b | 2026-02-23 | SMTP async + badge dinamico |
+| v1.9.0 | 69581af | 2026-02-23 | Maquina de estados: aguardando_envio + enviada (#A05) |
+| v1.9.1 | af733fc | 2026-02-23 | Preview de email na configuracao de FIDCs (#A08) |
+| v1.9.2 | c2a2a19 | 2026-02-24 | Contagem separada de Parcialmente Aprovados (#A07) |
+
+---
+
+## 9. MAQUINA DE ESTADOS DE OPERACAO (v1.9.0+)
+
+```
+                    ┌─────────────────┐
+                    │ em_processamento │
+                    └────────┬────────┘
+                             │ processar (aprovados > 0)
+                    ┌────────▼────────┐
+                    │ aguardando_envio│◄──── reprocessar
+                    └────────┬────────┘
+                             │ todos emails enviados
+                    ┌────────▼────────┐
+                    │    enviada      │
+                    └────────┬────────┘
+                             │ finalizar
+                    ┌────────▼────────┐
+                    │   concluida     │
+                    └─────────────────┘
+```
+
+**Guards:**
+- Finalizar: requer status `enviada` (ou `em_processamento` para retrocompat legado)
+- Cancelar: permitido de `em_processamento` ou `aguardando_envio`
+- Enviar: permitido de `aguardando_envio` (ou `em_processamento`/`enviada` para retrocompat)
+
+---
+
+## 10. STATUS DE BOLETOS E CONTAGEM (v1.9.2+)
+
+| Status | Badge | Cor | Contagem | Incluido em |
+|--------|-------|-----|----------|-------------|
+| `aprovado` | Aprovado | Verde (#059669) | `total_aprovados` | Emails, valor_bruto, relatorio aprovados |
+| `parcialmente_aprovado` | Parcial | Azul (#2563eb) | `total_parcialmente_aprovados` | Emails, valor_bruto, relatorio aprovados |
+| `rejeitado` | Rejeitado | Vermelho (#DC2626) | `total_rejeitados` | Relatorio erros |
+| `pendente` | Pendente | Cinza | (nao contado) | Nenhum |
+
+**Formula:** `taxa_sucesso = (total_aprovados + total_parcialmente_aprovados) / total_boletos * 100`
+
+**Visibilidade:** Dashboard, historico e nova-operacao exibem **3 categorias** (Aprovados, Parciais, Rejeitados) com cards/colunas separados.

@@ -21,6 +21,7 @@ class Operacao(Base):
     modo_envio: Mapped[str] = mapped_column(String(20), nullable=False, default="preview")  # preview | automatico
     total_boletos: Mapped[int] = mapped_column(Integer, default=0)
     total_aprovados: Mapped[int] = mapped_column(Integer, default=0)
+    total_parcialmente_aprovados: Mapped[int] = mapped_column(Integer, default=0)
     total_rejeitados: Mapped[int] = mapped_column(Integer, default=0)
     taxa_sucesso: Mapped[float] = mapped_column(Float, default=0.0)
     valor_bruto: Mapped[float | None] = mapped_column(Float, nullable=True)

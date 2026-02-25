@@ -2,7 +2,7 @@
 
 > **Ultima atualizacao:** 2026-02-25
 > **Sessao:** Implementacao M1-M7 + Aprimoramentos A01-A08
-> **Versao atual:** v1.9.4
+> **Versao atual:** v1.9.5
 > **Fonte de verdade:** `docs/prd/PRD-001-Especificacao.md`
 
 ---
@@ -15,7 +15,7 @@
 ┌─ HOST WINDOWS ──────────────────────────────────────┐
 │                                                      │
 │  ┌─────────────────┐    ┌──────────────────────┐    │
-│  │ Next.js :5555   │    │ FastAPI :5556         │    │
+│  │ Next.js :21555  │    │ FastAPI :21556        │    │
 │  │ (npm run dev)   │───►│ (venv + uvicorn)      │──SMTP──► Email
 │  └─────────────────┘    └──────────┬───────────┘    │
 │                                    │ TCP:5432        │
@@ -32,7 +32,7 @@
 - Backend FastAPI roda no **HOST Windows** via `venv`
 - Frontend Next.js roda no **HOST Windows** via Node.js
 - Envio de emails via **SMTP** (stdlib `smtplib`) — Outlook COM foi removido
-- **Portas:** Backend 5556, Frontend 5555, PostgreSQL 5434
+- **Portas (configuraveis via .env):** Backend 21556, Frontend 21555, PostgreSQL 21434
 
 ---
 
@@ -136,6 +136,7 @@
 - [x] **#A07 (v1.9.2):** Nomenclatura de boletos — contagem separada de Parcialmente Aprovados em todas as telas
 - [x] **Fix (v1.9.3):** Fallback `|| 0` em todos os 10 pontos de uso de `parcialmente_aprovados` no frontend — corrige undefined em cards e send controls
 - [x] **Fix (v1.9.4):** Extrator Squid capturava linha digitavel (barcode) como nome do pagador — adicionada exclusao de "Recibo do Pagador" e validacao anti-barcode
+- [x] **Infra (v1.9.5):** Portas configuraveis (21xxx) — centralizadas no .env, verificacao de conflitos no startup, proxy dinamico
 
 ---
 
@@ -150,7 +151,7 @@ Sistema_Envio_Recebiveis/
 ├── start_system.bat                        # Inicia Docker + Backend(5556) + Frontend(5555)
 ├── stop_system.bat                         # Para tudo
 ├── CLAUDE.md                               # Instruções do projeto + regra de versionamento
-├── VERSION                                 # Fonte unica de verdade para versao (1.9.4)
+├── VERSION                                 # Fonte unica de verdade para versao (1.9.5)
 ├── CHANGELOG.md                            # Historico de alteracoes por versao
 │
 ├── docs/
@@ -238,7 +239,7 @@ Sistema_Envio_Recebiveis/
 │
 └── frontend/
     ├── package.json                        # Next.js 16.1.6, React 19, shadcn/ui 3.8, recharts 3.7, Lucide React
-    ├── next.config.ts                      # Proxy rewrite /api/* → localhost:5556, lê VERSION
+    ├── next.config.ts                      # Proxy rewrite /api/* → localhost:BACKEND_PORT (dinamico), lê VERSION
     ├── components.json                     # shadcn/ui config (Tailwind v4)
     ├── tsconfig.json
     ├── src/
@@ -282,7 +283,7 @@ Sistema_Envio_Recebiveis/
 
 ### Opção 1: Script automático
 ```bat
-start_system.bat    :: Inicia Docker + migrations + seed + backend(5556) + frontend(5555) + LAN IP
+start_system.bat    :: Inicia Docker + migrations + seed + backend(21556) + frontend(21555) + verifica portas
 stop_system.bat     :: Para tudo
 ```
 
@@ -298,19 +299,19 @@ venv\Scripts\activate
 pip install -r requirements.txt              # Apenas primeira vez
 alembic upgrade head                         # Migrations
 python -m app.seed                           # Seed (4 FIDCs + 2 usuarios)
-uvicorn main:app --reload --host 0.0.0.0 --port 5556
+uvicorn main:app --reload --host 0.0.0.0 --port 21556
 
 # 3. Frontend (Next.js)
 cd frontend
 npm install                                  # Apenas primeira vez
-npm run dev                                  # http://localhost:5555
+set BACKEND_PORT=21556 && npx next dev -H 0.0.0.0 -p 21555
 ```
 
 ### Credenciais
 - **Admin:** `admin@jotajota.net.br` / `admin123`
 - **Camila:** `camila@jotajota.net.br` / `acessoJJcamila26`
-- **API Docs:** http://localhost:5556/api/docs
-- **Frontend:** http://localhost:5555
+- **API Docs:** http://localhost:21556/api/docs
+- **Frontend:** http://localhost:21555
 
 ---
 
@@ -319,7 +320,7 @@ npm run dev                                  # http://localhost:5555
 ### Projeto COMPLETO (M1-M7) + Aprimoramentos A01-A08 — Em uso producao (rede local)
 
 Todas as fases de desenvolvimento foram concluidas com sucesso.
-O sistema esta funcional e em uso na rede local. Versao atual: **v1.9.4**.
+O sistema esta funcional e em uso na rede local. Versao atual: **v1.9.5**.
 
 **Ultimos commits:**
 - `15b6f9f` fix: extrator Squid capturava linha digitavel como nome do pagador — **v1.9.4**
@@ -349,7 +350,7 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.9.4**.
 | Next.js | 16.1.6 (App Router) | `next.config.ts` (TypeScript) |
 | React | 19 | Automatic batching, concurrent features |
 | Fontes | DM Sans + Barlow Condensed | via `next/font/google` |
-| API Proxy | Next.js rewrites | `/api/*` → `localhost:5556` |
+| API Proxy | Next.js rewrites | `/api/*` → `localhost:${BACKEND_PORT}` (dinamico) |
 | DB Driver | asyncpg | SQLAlchemy 2.x async |
 | Email | SMTP (smtplib) | Substituiu Outlook COM (pywin32 removido) |
 | Email per-FIDC | 3 campos nullable | Override do layout global (NULL = usar global) |
@@ -398,7 +399,7 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.9.4**.
 
 ## 8. VERSIONAMENTO
 
-### Versao Atual: 1.9.4
+### Versao Atual: 1.9.5
 
 O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 - **MAJOR** (X.0.0): Mudancas incompativeis (schema DB, API breaking changes)

@@ -9,6 +9,8 @@ try {
   // Fallback if VERSION file not found
 }
 
+const backendPort = process.env.BACKEND_PORT || "21556";
+
 const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: appVersion,
@@ -17,7 +19,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: "http://localhost:5556/api/:path*",
+        destination: `http://localhost:${backendPort}/api/:path*`,
       },
     ];
   },

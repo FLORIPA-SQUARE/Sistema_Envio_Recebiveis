@@ -5,6 +5,17 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.9.5] - 2026-02-25
+
+### Alterado
+- Portas do sistema migradas para faixa 21xxx: Frontend 21555, Backend 21556, PostgreSQL 21434
+- Portas centralizadas no `.env` como fonte unica de verdade (FRONTEND_PORT, BACKEND_PORT, POSTGRES_PORT)
+- `start_system.bat` le portas do `.env` e verifica conflitos antes de iniciar (mostra PID em caso de erro)
+- `next.config.ts` proxy dinamico — le BACKEND_PORT de env var ao inves de hardcoded
+- Removida porta hardcoded de `package.json` scripts (passada via `-p` no bat)
+- Removido `NEXT_PUBLIC_API_URL` obsoleto do `.env` (proxy do Next.js cuida automaticamente)
+- Corrigido `BACKEND_PORT` default em `config.py` de 8000 para 21556
+
 ## [1.9.4] - 2026-02-25
 
 ### Corrigido

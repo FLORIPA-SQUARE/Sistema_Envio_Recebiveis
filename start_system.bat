@@ -6,8 +6,67 @@ echo   Sistema de Automacao de Boletos - JotaJota
 echo ============================================
 echo.
 
+:: ── Ler portas do .env ──
+set FRONTEND_PORT=21555
+set BACKEND_PORT=21556
+set POSTGRES_PORT=21434
+if exist "%~dp0.env" (
+    for /f "usebackq tokens=1,2 delims==" %%a in ("%~dp0.env") do (
+        if "%%a"=="FRONTEND_PORT" set FRONTEND_PORT=%%b
+        if "%%a"=="BACKEND_PORT" set BACKEND_PORT=%%b
+        if "%%a"=="POSTGRES_PORT" set POSTGRES_PORT=%%b
+    )
+)
+echo   Portas configuradas:
+echo     Frontend:   %FRONTEND_PORT%
+echo     Backend:    %BACKEND_PORT%
+echo     PostgreSQL: %POSTGRES_PORT%
+echo.
+
+:: ── Verificar conflitos de porta ──
+echo [0/6] Verificando portas disponiveis...
+
+netstat -ano | findstr ":%POSTGRES_PORT% " | findstr "LISTENING" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    echo.
+    echo   ERRO: Porta %POSTGRES_PORT% ^(PostgreSQL^) ja esta em uso!
+    echo   Processos usando a porta:
+    netstat -ano | findstr ":%POSTGRES_PORT% " | findstr "LISTENING"
+    echo.
+    echo   Altere POSTGRES_PORT no arquivo .env e tente novamente.
+    pause
+    exit /b 1
+)
+
+netstat -ano | findstr ":%BACKEND_PORT% " | findstr "LISTENING" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    echo.
+    echo   ERRO: Porta %BACKEND_PORT% ^(Backend^) ja esta em uso!
+    echo   Processos usando a porta:
+    netstat -ano | findstr ":%BACKEND_PORT% " | findstr "LISTENING"
+    echo.
+    echo   Altere BACKEND_PORT no arquivo .env e tente novamente.
+    pause
+    exit /b 1
+)
+
+netstat -ano | findstr ":%FRONTEND_PORT% " | findstr "LISTENING" >nul 2>&1
+if %ERRORLEVEL% equ 0 (
+    echo.
+    echo   ERRO: Porta %FRONTEND_PORT% ^(Frontend^) ja esta em uso!
+    echo   Processos usando a porta:
+    netstat -ano | findstr ":%FRONTEND_PORT% " | findstr "LISTENING"
+    echo.
+    echo   Altere FRONTEND_PORT no arquivo .env e tente novamente.
+    pause
+    exit /b 1
+)
+
+echo        Todas as portas livres!
+echo.
+
 :: 1. Start PostgreSQL via Docker
-echo [1/5] Iniciando PostgreSQL (Docker)...
+echo [1/6] Iniciando PostgreSQL (Docker) na porta %POSTGRES_PORT%...
 docker-compose up -d
 if %ERRORLEVEL% neq 0 (
     echo ERRO: Falha ao iniciar Docker. Verifique se o Docker Desktop esta rodando.
@@ -16,7 +75,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 :: 2. Wait for PostgreSQL to be ready
-echo [2/5] Aguardando PostgreSQL ficar pronto...
+echo [2/6] Aguardando PostgreSQL ficar pronto...
 :wait_pg
 docker-compose exec -T postgres pg_isready -U boletos_user -d boletos_db >nul 2>&1
 if %ERRORLEVEL% neq 0 (
@@ -26,7 +85,7 @@ if %ERRORLEVEL% neq 0 (
 echo        PostgreSQL pronto!
 
 :: 3. Run migrations
-echo [3/5] Executando migrations (Alembic)...
+echo [3/6] Executando migrations (Alembic)...
 cd backend
 if not exist "venv" (
     echo        Criando venv...
@@ -44,12 +103,12 @@ if %ERRORLEVEL% neq 0 (
 )
 
 :: 4. Run seed
-echo [4/5] Executando seed (FIDCs + usuario padrao)...
+echo [4/6] Executando seed (FIDCs + usuario padrao)...
 python -m app.seed
 
 :: 5. Start Backend (new window)
-echo [5/6] Iniciando Backend (porta 5556)...
-start "Backend FastAPI" cmd /k "cd /d %~dp0backend && call venv\Scripts\activate.bat && uvicorn main:app --reload --host 0.0.0.0 --port 5556"
+echo [5/6] Iniciando Backend (porta %BACKEND_PORT%)...
+start "Backend FastAPI" cmd /k "cd /d %~dp0backend && call venv\Scripts\activate.bat && uvicorn main:app --reload --host 0.0.0.0 --port %BACKEND_PORT%"
 
 :: 6. Health check — wait for backend to be ready
 echo [6/6] Aguardando Backend ficar pronto...
@@ -59,7 +118,7 @@ if %RETRIES% geq 30 (
     echo AVISO: Timeout aguardando backend. Iniciando frontend mesmo assim...
     goto start_frontend
 )
-powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:5556/api/health' -UseBasicParsing -TimeoutSec 2; if ($r.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
+powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:%BACKEND_PORT%/api/health' -UseBasicParsing -TimeoutSec 2; if ($r.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     echo        Backend pronto!
     goto start_frontend
@@ -69,9 +128,9 @@ timeout /t 2 /nobreak >nul
 goto wait_backend
 
 :start_frontend
-:: 7. Start Frontend (new window)
+:: 7. Start Frontend (new window) — passa BACKEND_PORT para next.config.ts
 cd /d %~dp0frontend
-start "Frontend Next.js" cmd /k "cd /d %~dp0frontend && npm run dev"
+start "Frontend Next.js" cmd /k "cd /d %~dp0frontend && set BACKEND_PORT=%BACKEND_PORT% && npx next dev -H 0.0.0.0 -p %FRONTEND_PORT%"
 
 :: 8. Detect real LAN IP (skip virtual adapters like Docker/WSL)
 cd /d %~dp0
@@ -86,12 +145,15 @@ echo ============================================
 echo   Sistema iniciado com sucesso!
 echo.
 echo   Acesso local:
-echo     Frontend: http://localhost:5555
-echo     Backend:  http://localhost:5556
+echo     Frontend: http://localhost:%FRONTEND_PORT%
+echo     Backend:  http://localhost:%BACKEND_PORT%
 echo.
 echo   Acesso pela rede:
-echo     Frontend: http://%LOCAL_IP%:5555
-echo     Backend:  http://%LOCAL_IP%:5556
+echo     Frontend: http://%LOCAL_IP%:%FRONTEND_PORT%
+echo     Backend:  http://%LOCAL_IP%:%BACKEND_PORT%
+echo.
+echo   Portas em uso:
+echo     Frontend=%FRONTEND_PORT%  Backend=%BACKEND_PORT%  PostgreSQL=%POSTGRES_PORT%
 echo ============================================
 echo.
 echo Pressione qualquer tecla para fechar esta janela...

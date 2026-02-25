@@ -20,6 +20,17 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.9.5",
+    date: "2026-02-25",
+    summary: "Portas configuraveis (21xxx) para deploy em producao",
+    items: [
+      "Portas migradas para faixa 21xxx: Frontend 21555, Backend 21556, PostgreSQL 21434",
+      "Portas centralizadas no .env (FRONTEND_PORT, BACKEND_PORT, POSTGRES_PORT)",
+      "start_system.bat verifica conflitos de porta antes de iniciar",
+      "Proxy Next.js dinamico — le BACKEND_PORT de env var",
+    ],
+  },
+  {
     version: "1.9.4",
     date: "2026-02-25",
     summary: "Fix: extrator Squid capturava linha digitavel como nome do pagador",

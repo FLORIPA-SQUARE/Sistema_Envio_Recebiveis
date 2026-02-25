@@ -1,11 +1,11 @@
 {
   "name": "frontend",
-  "version": "1.9.4",
+  "version": "1.9.5",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 0.0.0.0 -p 5555",
+    "dev": "next dev -H 0.0.0.0",
     "build": "next build",
-    "start": "next start -H 0.0.0.0 -p 5555",
+    "start": "next start -H 0.0.0.0",
     "lint": "eslint"
   },
   "dependencies": {

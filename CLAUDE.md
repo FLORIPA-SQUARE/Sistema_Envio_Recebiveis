@@ -56,13 +56,44 @@ Seu trabalho deve seguir esta ordem. Não pule etapas.
 - [ ] Implementar método `send_email()` (Modo Automático).
 - [ ] Garantir que o loop de envio suporte anexos múltiplos e ordenação por data.
 
-## 6. Comandos Úteis
-* Para instalar dependências backend: `pip install -r requirements.txt`
-* Para rodar backend (dev): `uvicorn main:app --reload`
-* Para rodar frontend (dev): `npm run dev`
+## 6. Deploy em Rede Local (Producao)
+
+### Portas do Sistema (configuraveis via `.env`)
+| Servico | Porta Padrao | Variavel no .env |
+|---------|-------------|-----------------|
+| Frontend (Next.js) | 21555 | `FRONTEND_PORT` |
+| Backend (FastAPI) | 21556 | `BACKEND_PORT` |
+| PostgreSQL (Docker) | 21434 | `POSTGRES_PORT` |
+
+> **Se houver conflito de porta** com outro sistema na maquina, basta alterar o valor
+> correspondente no arquivo `.env` na raiz do projeto. O `start_system.bat` le as portas
+> do `.env` e verifica se estao livres antes de iniciar.
+
+### Como rodar em producao (rede local)
+1. Abra o terminal ou Cursor no diretorio do projeto
+2. Execute `start_system.bat` (duplo clique ou pelo terminal)
+3. O script abre **3 janelas CMD separadas** (PostgreSQL, Backend, Frontend)
+4. Aguarde a mensagem "Sistema iniciado com sucesso!" com os links de acesso
+5. **Pode fechar o Cursor/terminal original** — as janelas CMD sao independentes e continuam rodando
+6. Para parar: execute `stop_system.bat`
+
+### IMPORTANTE — Processos e janelas
+- As janelas CMD do Backend e Frontend **precisam ficar abertas**. Se fechar uma, o servico para.
+- **NUNCA** inicie o backend/frontend pelo terminal integrado do Cursor se pretende fechar o Cursor depois — os processos morrem junto.
+- Se precisar reiniciar: rode `stop_system.bat` primeiro, depois `start_system.bat`.
+- O script detecta automaticamente o IP da rede local e exibe o link de acesso.
+
+### Verificacao de conflitos
+O `start_system.bat` verifica automaticamente se as portas estao livres antes de iniciar.
+Se uma porta estiver ocupada, mostra o PID do processo que a esta usando e instrui a alterar no `.env`.
+
+## 7. Comandos Uteis (Desenvolvimento)
+* Para instalar dependencias backend: `pip install -r requirements.txt`
+* Para rodar backend (dev): `uvicorn main:app --reload --host 0.0.0.0 --port 21556`
+* Para rodar frontend (dev): `BACKEND_PORT=21556 npx next dev -H 0.0.0.0 -p 21555`
 * Para rodar banco: `docker-compose up -d`
 
-## 7. Controle de Versão
+## 8. Controle de Versão
 
 **Versão Atual: v1.9.5**
 

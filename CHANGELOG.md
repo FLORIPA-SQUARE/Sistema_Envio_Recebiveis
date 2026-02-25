@@ -5,6 +5,13 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.9.4] - 2026-02-25
+
+### Corrigido
+- Extrator Squid capturava linha digitavel (codigo de barras) como nome do pagador
+- Adicionada exclusao de "Recibo do Pagador" (cabecalho) e validacao anti-barcode
+- Nomes de pagadores e renomeacao de arquivos agora corretos para boletos Squid
+
 ## [1.9.3] - 2026-02-25
 
 ### Corrigido

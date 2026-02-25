@@ -20,6 +20,16 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.9.4",
+    date: "2026-02-25",
+    summary: "Fix: extrator Squid capturava linha digitavel como nome do pagador",
+    items: [
+      "Corrigido: 'Recibo do Pagador' era confundido com campo 'Pagador', capturando codigo de barras",
+      "Adicionada exclusao de cabecalho RECIBO e validacao anti-barcode (regex)",
+      "Nomes de pagadores e renomeacao de arquivos agora corretos para boletos Squid",
+    ],
+  },
+  {
     version: "1.9.3",
     date: "2026-02-25",
     summary: "Fix: Parciais undefined e controles de envio ocultos",

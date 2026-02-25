@@ -1,8 +1,8 @@
 # ESTADO ATUAL DO PROJETO — Sistema Automação Envio de Boletos
 
-> **Ultima atualizacao:** 2026-02-24
+> **Ultima atualizacao:** 2026-02-25
 > **Sessao:** Implementacao M1-M7 + Aprimoramentos A01-A08
-> **Versao atual:** v1.9.2
+> **Versao atual:** v1.9.4
 > **Fonte de verdade:** `docs/prd/PRD-001-Especificacao.md`
 
 ---
@@ -134,6 +134,8 @@
 - [x] **#A05 (v1.9.0):** Maquina de estados completa: em_processamento → aguardando_envio → enviada → concluida
 - [x] **#A08 (v1.9.1):** Preview de email na configuracao de FIDCs — POST /fidcs/preview-email, botao Eye, iframe dialog
 - [x] **#A07 (v1.9.2):** Nomenclatura de boletos — contagem separada de Parcialmente Aprovados em todas as telas
+- [x] **Fix (v1.9.3):** Fallback `|| 0` em todos os 10 pontos de uso de `parcialmente_aprovados` no frontend — corrige undefined em cards e send controls
+- [x] **Fix (v1.9.4):** Extrator Squid capturava linha digitavel (barcode) como nome do pagador — adicionada exclusao de "Recibo do Pagador" e validacao anti-barcode
 
 ---
 
@@ -148,7 +150,7 @@ Sistema_Envio_Recebiveis/
 ├── start_system.bat                        # Inicia Docker + Backend(5556) + Frontend(5555)
 ├── stop_system.bat                         # Para tudo
 ├── CLAUDE.md                               # Instruções do projeto + regra de versionamento
-├── VERSION                                 # Fonte unica de verdade para versao (1.9.2)
+├── VERSION                                 # Fonte unica de verdade para versao (1.9.4)
 ├── CHANGELOG.md                            # Historico de alteracoes por versao
 │
 ├── docs/
@@ -317,16 +319,18 @@ npm run dev                                  # http://localhost:5555
 ### Projeto COMPLETO (M1-M7) + Aprimoramentos A01-A08 — Em uso producao (rede local)
 
 Todas as fases de desenvolvimento foram concluidas com sucesso.
-O sistema esta funcional e em uso na rede local. Versao atual: **v1.9.2**.
+O sistema esta funcional e em uso na rede local. Versao atual: **v1.9.4**.
 
 **Ultimos commits:**
+- `15b6f9f` fix: extrator Squid capturava linha digitavel como nome do pagador — **v1.9.4**
+- `65158f2` fix: fallback para parcialmente_aprovados undefined no frontend — **v1.9.3**
+- `32c1411` feat: contagem separada de parcialmente aprovados em todas as telas — **v1.9.2**
 - `af733fc` feat: preview de email na configuracao de FIDCs — **v1.9.1**
 - `69581af` feat: maquina de estados com aguardando_envio e enviada — **v1.9.0**
 - `da9d95b` fix: SMTP async e badge de status dinamico na nova-operacao — **v1.8.2**
 - `27099e2` fix: correcoes pos v1.8.0 — operacao undefined, status boletos, NF duplicada — **v1.8.1**
 - `950dedc` feat: usuario responsavel na auditoria e versao de finalizacao — **v1.8.0**
 - `7550f9d` feat: status parcialmente aprovado, legenda de cores e agrupamento visual — **v1.7.0**
-- `ee4cb58` fix: corrigir extracao de NF no extrator Novax — **v1.6.2**
 
 **Melhorias opcionais futuras:**
 1. **Refatoracao** — `nova-operacao/page.tsx` (~3100 linhas) em sub-componentes
@@ -394,7 +398,7 @@ O sistema esta funcional e em uso na rede local. Versao atual: **v1.9.2**.
 
 ## 8. VERSIONAMENTO
 
-### Versao Atual: 1.9.2
+### Versao Atual: 1.9.4
 
 O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 - **MAJOR** (X.0.0): Mudancas incompativeis (schema DB, API breaking changes)
@@ -437,7 +441,9 @@ O projeto segue [Semantic Versioning](https://semver.org/lang/pt-BR/):
 | v1.8.2 | da9d95b | 2026-02-23 | SMTP async + badge dinamico |
 | v1.9.0 | 69581af | 2026-02-23 | Maquina de estados: aguardando_envio + enviada (#A05) |
 | v1.9.1 | af733fc | 2026-02-23 | Preview de email na configuracao de FIDCs (#A08) |
-| v1.9.2 | c2a2a19 | 2026-02-24 | Contagem separada de Parcialmente Aprovados (#A07) |
+| v1.9.2 | 32c1411 | 2026-02-24 | Contagem separada de Parcialmente Aprovados (#A07) |
+| v1.9.3 | 65158f2 | 2026-02-25 | Fallback parcialmente_aprovados undefined no frontend |
+| v1.9.4 | 15b6f9f | 2026-02-25 | Fix extrator Squid: barcode como nome do pagador |
 
 ---
 

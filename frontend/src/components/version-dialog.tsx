@@ -20,6 +20,16 @@ interface VersionInfo {
 
 const CHANGELOG_ENTRIES = [
   {
+    version: "1.9.3",
+    date: "2026-02-25",
+    summary: "Fix: Parciais undefined e controles de envio ocultos",
+    items: [
+      "Fallback || 0 em todos os pontos de uso de parcialmente_aprovados no frontend",
+      "Controles de envio agora aparecem corretamente mesmo com campo ausente na API",
+      "Cards Parciais no dashboard, historico e nova-operacao nunca mais mostram undefined",
+    ],
+  },
+  {
     version: "1.9.2",
     date: "2026-02-24",
     summary: "Contagem separada de Parcialmente Aprovados em todas as telas (#A07)",

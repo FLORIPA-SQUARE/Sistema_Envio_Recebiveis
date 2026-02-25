@@ -390,7 +390,7 @@ export default function HistoricoPage() {
                         {op.total_aprovados}
                       </TableCell>
                       <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)] text-blue-600">
-                        {op.total_parcialmente_aprovados}
+                        {op.total_parcialmente_aprovados || 0}
                       </TableCell>
                       <TableCell className="text-right font-[family-name:var(--font-barlow-condensed)] text-destructive">
                         {op.total_rejeitados}

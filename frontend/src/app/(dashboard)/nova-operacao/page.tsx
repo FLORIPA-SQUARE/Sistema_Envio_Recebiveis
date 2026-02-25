@@ -392,7 +392,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
           setResultado({
             total: op.total_boletos,
             aprovados: op.total_aprovados,
-            parcialmente_aprovados: op.total_parcialmente_aprovados,
+            parcialmente_aprovados: op.total_parcialmente_aprovados || 0,
             rejeitados: op.total_rejeitados,
             taxa_sucesso: op.taxa_sucesso,
             boletos: op.boletos,
@@ -716,7 +716,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
       setResultado(result);
       setUploadedBoletos(result.boletos);
       toast.success(
-        `Processamento concluido: ${result.aprovados} aprovados, ${result.parcialmente_aprovados} parciais, ${result.rejeitados} rejeitados`
+        `Processamento concluido: ${result.aprovados} aprovados, ${result.parcialmente_aprovados || 0} parciais, ${result.rejeitados} rejeitados`
       );
       // Atualizar status da operacao e carregar preview de envio
       await refreshOperacaoStatus();
@@ -1020,7 +1020,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
       );
       setResultado(result);
       setUploadedBoletos(result.boletos);
-      toast.success(`Reprocessamento: ${result.aprovados} aprovados, ${result.parcialmente_aprovados} parciais, ${result.rejeitados} rejeitados`);
+      toast.success(`Reprocessamento: ${result.aprovados} aprovados, ${result.parcialmente_aprovados || 0} parciais, ${result.rejeitados} rejeitados`);
       await refreshOperacaoStatus();
       await fetchEnvioPreview();
     } catch {
@@ -1041,7 +1041,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
       setResultado({
         total: op.total_boletos,
         aprovados: op.total_aprovados,
-        parcialmente_aprovados: op.total_parcialmente_aprovados,
+        parcialmente_aprovados: op.total_parcialmente_aprovados || 0,
         rejeitados: op.total_rejeitados,
         taxa_sucesso: op.taxa_sucesso,
         boletos: op.boletos,
@@ -2116,7 +2116,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                   <Card>
                     <CardContent className="pt-6">
                       <p className="text-sm text-muted-foreground">Parciais</p>
-                      <p className="text-2xl font-bold text-blue-600 font-[family-name:var(--font-barlow-condensed)]">{resultado.parcialmente_aprovados}</p>
+                      <p className="text-2xl font-bold text-blue-600 font-[family-name:var(--font-barlow-condensed)]">{resultado.parcialmente_aprovados || 0}</p>
                     </CardContent>
                   </Card>
                   <Card>
@@ -2330,7 +2330,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
           )}
 
           {/* Controles de envio */}
-          {resultado && (resultado.aprovados + resultado.parcialmente_aprovados) > 0 && (
+          {resultado && (resultado.aprovados + (resultado.parcialmente_aprovados || 0)) > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Enviar Boletos por Email</CardTitle>
@@ -2355,7 +2355,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
                     {envioLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : envioMode === "preview" ? <Eye className="h-4 w-4" /> : <Send className="h-4 w-4" />}
                     {envioLoading ? "Enviando..." : envioMode === "preview" ? "Criar Rascunhos" : "Enviar Emails"}
                   </Button>
-                  <span className="text-sm text-muted-foreground">{resultado.aprovados + resultado.parcialmente_aprovados} boleto(s) para envio</span>
+                  <span className="text-sm text-muted-foreground">{resultado.aprovados + (resultado.parcialmente_aprovados || 0)} boleto(s) para envio</span>
                 </div>
               </CardContent>
             </Card>
@@ -2477,7 +2477,7 @@ function OperationEditor({ tabId }: { tabId: string }) {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold font-[family-name:var(--font-barlow-condensed)] text-blue-600">
-                  {resultado.parcialmente_aprovados}
+                  {resultado.parcialmente_aprovados || 0}
                 </div>
               </CardContent>
             </Card>

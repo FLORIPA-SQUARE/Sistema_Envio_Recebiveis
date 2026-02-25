@@ -5,6 +5,14 @@ Todas as alteracoes notaveis deste projeto serao documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.9.3] - 2026-02-25
+
+### Corrigido
+- Card "Parciais" exibia undefined/vazio quando campo ausente na resposta da API
+- Controles de envio (botoes Enviar/Rascunho) ficavam ocultos devido a aritmetica com undefined
+- Fallback `|| 0` adicionado em todos os 10 pontos de uso de `parcialmente_aprovados` no frontend
+- Dashboard, historico e nova-operacao agora tratam campo ausente graciosamente
+
 ## [1.9.2] - 2026-02-24
 
 ### Adicionado

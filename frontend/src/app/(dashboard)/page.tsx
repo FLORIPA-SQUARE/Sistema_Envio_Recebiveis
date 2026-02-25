@@ -153,7 +153,7 @@ export default function DashboardPage() {
     },
     {
       label: "Parciais",
-      value: stats ? String(stats.total_parcialmente_aprovados) : "—",
+      value: stats ? String(stats.total_parcialmente_aprovados || 0) : "—",
       icon: AlertTriangle,
       color: "text-blue-600",
     },
